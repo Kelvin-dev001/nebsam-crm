@@ -3,6 +3,7 @@ import localFont from "next/font/local"
 import "./globals.css"
 import { Sidebar } from "@/components/layout/Sidebar"
 import { Header } from "@/components/layout/Header"
+import { MobileNav } from "@/components/layout/MobileNav"
 import { Toaster } from "@/components/ui/sonner"
 
 const geistSans = localFont({
@@ -30,11 +31,16 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+        {/* Desktop sidebar */}
         <Sidebar />
+        {/* Top header — full width on mobile, offset by sidebar on desktop */}
         <Header />
-        <main className="pl-60 pt-16 min-h-screen bg-white">
+        {/* Main content — no left offset on mobile, sidebar offset on desktop */}
+        <main className="pt-16 pb-20 lg:pb-0 lg:pl-60 min-h-screen bg-white">
           {children}
         </main>
+        {/* Bottom tab bar — mobile only */}
+        <MobileNav />
         <Toaster richColors />
       </body>
     </html>

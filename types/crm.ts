@@ -94,6 +94,7 @@ export interface Telemarketer {
   full_name: string
   email: string
   phone: string | null
+  is_active: boolean
   created_at: string
 }
 

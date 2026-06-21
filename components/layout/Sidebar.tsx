@@ -17,7 +17,7 @@ export function Sidebar() {
   const pathname = usePathname()
 
   return (
-    <aside className="fixed inset-y-0 left-0 z-50 w-60 flex flex-col" style={{ backgroundColor: "#0F1729" }}>
+    <aside className="hidden lg:flex fixed inset-y-0 left-0 z-50 w-60 flex-col" style={{ backgroundColor: "#0F1729" }}>
       {/* Logo */}
       <div className="flex h-16 items-center px-6 border-b border-white/10">
         <span className="text-white font-bold text-lg tracking-tight">Nebsam CRM</span>
