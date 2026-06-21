@@ -1,0 +1,2 @@
+-- Seed data — full implementation in Sprint 1
+-- Run with: supabase db reset (after migrations)
