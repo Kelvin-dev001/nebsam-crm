@@ -7,8 +7,9 @@ import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
 import { createClient } from "@/lib/supabase/client"
-import { Telemarketer } from "@/types/crm"
+import { Telemarketer, FunnelStage, RAGStatus } from "@/types/crm"
 import { format } from "date-fns"
+import { CallLogModal, type CallingLead, type CallSavedPayload } from "@/components/leads/CallLogModal"
 
 interface Props {
   telemarketer: Telemarketer
@@ -30,6 +31,7 @@ interface FollowUpItem {
 export function FollowUpToday({ telemarketer }: Props) {
   const [items, setItems] = useState<FollowUpItem[]>([])
   const [loading, setLoading] = useState(true)
+  const [callingLead, setCallingLead] = useState<CallingLead | null>(null)
 
   useEffect(() => {
     const supabase = createClient()
@@ -49,6 +51,7 @@ export function FollowUpToday({ telemarketer }: Props) {
   }, [telemarketer.id])
 
   return (
+    <>
     <Card className="border border-slate-200 shadow-none h-full">
       <CardHeader className="pb-3">
         <CardTitle className="text-sm font-semibold text-slate-700 flex items-center gap-2">
@@ -93,7 +96,19 @@ export function FollowUpToday({ telemarketer }: Props) {
                   {item.lead?.product_interested ?? "No product"} &middot; {item.notes ?? "No notes"}
                 </p>
               </div>
-              <Button size="sm" variant="outline" className="shrink-0 gap-1.5 text-xs h-8">
+              <Button
+                size="sm"
+                variant="outline"
+                className="shrink-0 gap-1.5 text-xs h-8"
+                onClick={() => item.lead && setCallingLead({
+                  id: item.lead.id,
+                  phone_number: item.lead.phone_number,
+                  full_name: item.lead.full_name,
+                  product_interested: item.lead.product_interested,
+                  funnel_stage: item.lead.funnel_stage as FunnelStage,
+                  rag_status: "amber" as RAGStatus,
+                })}
+              >
                 <Phone className="h-3 w-3" />
                 Call Now
               </Button>
@@ -102,5 +117,12 @@ export function FollowUpToday({ telemarketer }: Props) {
         )}
       </CardContent>
     </Card>
+
+    <CallLogModal
+      lead={callingLead}
+      onClose={() => setCallingLead(null)}
+      onSaved={(_payload: CallSavedPayload) => setCallingLead(null)}
+    />
+    </>
   )
 }

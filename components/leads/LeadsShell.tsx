@@ -22,6 +22,7 @@ import { FunnelStageBadge } from "./FunnelStageBadge"
 import { RAGBadge } from "./RAGBadge"
 import { LeadFilters } from "./LeadFilters"
 import { LeadTable } from "./LeadTable"
+import { CallLogModal, type CallSavedPayload } from "./CallLogModal"
 import { formatDate } from "@/lib/utils/dateHelpers"
 import { isPast } from "date-fns"
 import { cn } from "@/lib/utils"
@@ -50,6 +51,7 @@ export function LeadsShell() {
   const { activeTelemarketer } = useTelemarketerStore()
   const [data, setData] = useState<ProcessedLead[]>([])
   const [loading, setLoading] = useState(true)
+  const [callingLead, setCallingLead] = useState<ProcessedLead | null>(null)
   const [globalFilter, setGlobalFilter] = useState("")
   const [sorting, setSorting] = useState<SortingState>([{ id: "updated_at", desc: true }])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
@@ -191,7 +193,7 @@ export function LeadsShell() {
               size="sm"
               variant="outline"
               className="h-7 px-2 text-xs gap-1 whitespace-nowrap"
-              onClick={() => {/* Sprint 5: open Call Log Modal */}}
+              onClick={() => setCallingLead(row.original)}
             >
               <Phone className="h-3 w-3" />
               Call Now
@@ -230,6 +232,16 @@ export function LeadsShell() {
     },
   })
 
+  function handleCallSaved({ leadId, ragStatus, funnelStage }: CallSavedPayload) {
+    setData((prev) =>
+      prev.map((lead) =>
+        lead.id === leadId
+          ? { ...lead, rag_status: ragStatus, funnel_stage: funnelStage, last_called: new Date().toISOString() }
+          : lead
+      )
+    )
+  }
+
   if (!activeTelemarketer) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3 text-center p-6">
@@ -257,6 +269,12 @@ export function LeadsShell() {
 
       <LeadFilters table={table} globalFilter={globalFilter} onGlobalFilterChange={setGlobalFilter} />
       <LeadTable table={table} loading={loading} />
+
+      <CallLogModal
+        lead={callingLead}
+        onClose={() => setCallingLead(null)}
+        onSaved={handleCallSaved}
+      />
     </div>
   )
 }
