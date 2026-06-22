@@ -35,7 +35,7 @@ Deno.serve(async (_req: Request) => {
   // ── 1. Fetch all active leads ──────────────────────────────────────────────
   const { data: leads, error: leadsErr } = await supabase
     .from("leads")
-    .select("id, funnel_stage, rag_status, renewal_due_date")
+    .select("id, funnel_stage, rag_status")
     .in("funnel_stage", ACTIVE_STAGES)
 
   if (leadsErr || !leads) {
@@ -63,21 +63,28 @@ Deno.serve(async (_req: Request) => {
 
   const followupSoonSet = new Set((upcomingFollowups ?? []).map((f: any) => f.lead_id))
 
-  // ── 4. Compute new RAG for each lead ───────────────────────────────────────
+  // ── 4. Which leads have an overdue renewal (from sales table) ──────────────
+  // renewal_due_date lives on sales, not leads — must join via sales table
+  const { data: overdueRenewalSales } = await supabase
+    .from("sales")
+    .select("lead_id")
+    .in("lead_id", leadIds)
+    .lt("renewal_due_date", todayStr)
+    .not("renewal_due_date", "is", null)
+
+  const overdueRenewalSet = new Set((overdueRenewalSales ?? []).map((s: any) => s.lead_id))
+
+  // ── 5. Compute new RAG for each lead ───────────────────────────────────────
   const toRed: string[] = []
   const toAmber: string[] = []
 
   for (const lead of leads as any[]) {
-    const isOverdueRenewal =
-      lead.funnel_stage === "renewal_due" &&
-      lead.renewal_due_date &&
-      lead.renewal_due_date < todayStr
-
+    const isOverdueRenewal = overdueRenewalSet.has(lead.id)
     const hasNoRecentActivity = !recentlyCalledSet.has(lead.id)
     const hasFollowupSoon = followupSoonSet.has(lead.id)
 
     if (isOverdueRenewal) {
-      // Always RED for overdue renewals, even if green
+      // Always RED for overdue renewals regardless of current status
       if (lead.rag_status !== "red") toRed.push(lead.id)
     } else if (hasNoRecentActivity && lead.rag_status !== "green") {
       // No activity in 14+ days — don't override green (telemarketer may have talked off-platform)

@@ -17,6 +17,9 @@ ALTER TABLE round_robin_state ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "open_round_robin_state" ON round_robin_state
   FOR ALL USING (true) WITH CHECK (true);
 
+-- Explicit grants for PostgREST roles (required when creating tables outside Supabase dashboard)
+GRANT ALL ON TABLE public.round_robin_state TO anon, authenticated, service_role;
+
 -- ── RPC: Atomic lead assignment ──────────────────────────────
 -- Called by the webhook handler instead of direct table writes.
 -- Runs as a single DB transaction:
