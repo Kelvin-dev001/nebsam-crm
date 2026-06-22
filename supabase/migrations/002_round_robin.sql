@@ -35,6 +35,8 @@ CREATE OR REPLACE FUNCTION assign_lead_round_robin(
 )
 RETURNS JSONB
 LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
 AS $$
 DECLARE
   v_existing_lead_id      UUID;
@@ -44,6 +46,7 @@ DECLARE
   v_last_idx              INT;
   v_next_telemarketer_id  UUID;
   v_is_new                BOOLEAN := FALSE;
+  v_state_id              UUID;
 BEGIN
   -- 1. Check for existing lead
   SELECT id INTO v_existing_lead_id
@@ -94,10 +97,17 @@ BEGIN
     )
     RETURNING id INTO v_lead_id;
 
-    -- Advance round_robin_state (single row — always UPDATE)
-    UPDATE round_robin_state
-    SET last_assigned_telemarketer_id = v_next_telemarketer_id,
-        updated_at = now();
+    -- Advance round_robin_state (upsert — no hardcoded UUID, safe against pg_safeupdate)
+    SELECT id INTO v_state_id FROM round_robin_state LIMIT 1;
+    IF v_state_id IS NOT NULL THEN
+      UPDATE round_robin_state
+      SET last_assigned_telemarketer_id = v_next_telemarketer_id,
+          updated_at = now()
+      WHERE id = v_state_id;
+    ELSE
+      INSERT INTO round_robin_state (last_assigned_telemarketer_id)
+      VALUES (v_next_telemarketer_id);
+    END IF;
 
     v_is_new := TRUE;
   END IF;

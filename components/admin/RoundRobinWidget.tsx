@@ -10,7 +10,6 @@ import { format } from "date-fns"
 import { toast } from "sonner"
 
 const SUZZIE_ID = "33333333-3333-3333-3333-333333333333"
-const RR_ROW_ID = "rrr00000-0000-0000-0000-000000000001"
 
 interface TelemarketerStat {
   telemarketer: Telemarketer
@@ -90,7 +89,7 @@ export function RoundRobinWidget() {
     const { error } = await supabase
       .from("round_robin_state")
       .update({ last_assigned_telemarketer_id: SUZZIE_ID })
-      .eq("id", RR_ROW_ID)
+      .not("id", "is", null)
 
     if (error) {
       toast.error("Reset failed: " + error.message)
