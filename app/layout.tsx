@@ -19,7 +19,10 @@ const geistMono = localFont({
 })
 
 export const metadata: Metadata = {
-  title: "Nebsam CRM",
+  title: {
+    default: "Nebsam CRM",
+    template: "%s · Nebsam CRM",
+  },
   description: "Lead management for Nebsam Digital Solutions",
 }
 
