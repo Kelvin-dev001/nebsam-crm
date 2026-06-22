@@ -13,7 +13,7 @@ import {
   type PaginationState,
 } from "@tanstack/react-table"
 import Link from "next/link"
-import { Phone, Eye, ChevronUp, ChevronDown, ChevronsUpDown } from "lucide-react"
+import { Phone, Eye, ChevronUp, ChevronDown, ChevronsUpDown, Wifi } from "lucide-react"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { useTelemarketerStore } from "@/lib/stores/telemarketerStore"
 import { createClient } from "@/lib/supabase/client"
@@ -27,6 +27,7 @@ import { formatDate } from "@/lib/utils/dateHelpers"
 import { isPast } from "date-fns"
 import { cn } from "@/lib/utils"
 import { Users } from "lucide-react"
+import { toast } from "sonner"
 
 export interface ProcessedLead {
   id: string
@@ -102,6 +103,79 @@ export function LeadsShell() {
         setData(processed)
         setLoading(false)
       })
+  }, [activeTelemarketer?.id])
+
+  // Realtime subscription — new and updated leads appear instantly
+  useEffect(() => {
+    if (!activeTelemarketer) return
+    const supabase = createClient()
+
+    const channel = supabase
+      .channel(`leads-realtime-${activeTelemarketer.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "leads",
+          filter: `assigned_to=eq.${activeTelemarketer.id}`,
+        },
+        (payload) => {
+          const raw = payload.new as any
+          const newLead: ProcessedLead = {
+            id: raw.id,
+            phone_number: raw.phone_number,
+            full_name: raw.full_name,
+            product_interested: raw.product_interested,
+            funnel_stage: raw.funnel_stage,
+            rag_status: raw.rag_status,
+            lead_source: raw.lead_source,
+            campaign_name: raw.campaign_name,
+            location: raw.location,
+            vehicle_type: raw.vehicle_type,
+            whatsapp_message: raw.whatsapp_message,
+            assigned_to: raw.assigned_to,
+            created_at: raw.created_at,
+            updated_at: raw.updated_at,
+            last_called: null,
+            next_followup: null,
+          }
+          setData((prev) => [newLead, ...prev])
+          toast.info(`New lead: ${newLead.full_name ?? newLead.phone_number}`, {
+            description: "Arrived via WhatsApp",
+            icon: <Wifi className="h-4 w-4" />,
+          })
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "leads",
+          filter: `assigned_to=eq.${activeTelemarketer.id}`,
+        },
+        (payload) => {
+          const raw = payload.new as any
+          setData((prev) =>
+            prev.map((lead) =>
+              lead.id === raw.id
+                ? {
+                    ...lead,
+                    funnel_stage: raw.funnel_stage,
+                    rag_status: raw.rag_status,
+                    full_name: raw.full_name,
+                    product_interested: raw.product_interested,
+                    updated_at: raw.updated_at,
+                  }
+                : lead
+            )
+          )
+        }
+      )
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
   }, [activeTelemarketer?.id])
 
   const columns = useMemo<ColumnDef<ProcessedLead>[]>(
