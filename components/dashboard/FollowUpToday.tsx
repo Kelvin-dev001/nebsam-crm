@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button"
 import { createClient } from "@/lib/supabase/client"
 import { Telemarketer, FunnelStage, RAGStatus } from "@/types/crm"
 import { format } from "date-fns"
-import { CallLogModal, type CallingLead, type CallSavedPayload } from "@/components/leads/CallLogModal"
+import { CallLogModal, type CallingLead } from "@/components/leads/CallLogModal"
 
 interface Props {
   telemarketer: Telemarketer
@@ -121,7 +121,7 @@ export function FollowUpToday({ telemarketer }: Props) {
     <CallLogModal
       lead={callingLead}
       onClose={() => setCallingLead(null)}
-      onSaved={(_payload: CallSavedPayload) => setCallingLead(null)}
+      onSaved={() => setCallingLead(null)}
     />
     </>
   )

@@ -7,7 +7,7 @@ import { z } from "zod"
 import { Loader2, Phone, Plus, Lock, CalendarCheck, CheckCircle2, Clock, XCircle } from "lucide-react"
 import { toast } from "sonner"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -16,10 +16,10 @@ import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { createClient } from "@/lib/supabase/client"
 import { useTelemarketerStore } from "@/lib/stores/telemarketerStore"
-import { PRODUCTS, FUNNEL_STAGE_LABELS } from "@/types/crm"
+import { PRODUCTS, type FunnelStage, type RAGStatus } from "@/types/crm"
 import { RAGBadge } from "./RAGBadge"
 import { FunnelStageBadge } from "./FunnelStageBadge"
-import { type LeadDetail, type LeadSale } from "./LeadDetailShell"
+import { type LeadDetail, type LeadSale, type LeadFollowUp } from "./LeadDetailShell"
 import { formatDate, formatDateTime, formatRelative } from "@/lib/utils/dateHelpers"
 import { cn } from "@/lib/utils"
 import type { Resolver } from "react-hook-form"
@@ -59,7 +59,7 @@ function KYCTab({ lead, onLeadUpdated }: { lead: LeadDetail; onLeadUpdated: (u: 
 
   async function onSubmit(values: KYCValues) {
     const supabase = createClient()
-    const { error } = await (supabase.from("leads") as any).update(values).eq("id", lead.id)
+    const { error } = await supabase.from("leads").update(values).eq("id", lead.id)
     if (error) { toast.error("Failed to save"); return }
     onLeadUpdated(values as Partial<LeadDetail>)
     toast.success("Profile saved")
@@ -183,10 +183,10 @@ function CallHistoryTab({ lead }: { lead: LeadDetail }) {
                   <span className="text-xs text-slate-400">{mins}m {secs}s</span>
                 )}
                 {log.rag_status_after_call && (
-                  <RAGBadge status={log.rag_status_after_call as any} />
+                  <RAGBadge status={log.rag_status_after_call as RAGStatus} />
                 )}
                 {log.funnel_stage_after_call && (
-                  <FunnelStageBadge stage={log.funnel_stage_after_call as any} />
+                  <FunnelStageBadge stage={log.funnel_stage_after_call as FunnelStage} />
                 )}
               </div>
               {log.call_notes && (
@@ -289,11 +289,11 @@ function SaleDetailsTab({
     let savedSale: LeadSale | null = null
 
     if (existingSale) {
-      const { data, error } = await (supabase.from("sales") as any).update(payload).eq("id", existingSale.id).select().single()
+      const { data, error } = await supabase.from("sales").update(payload).eq("id", existingSale.id).select().single()
       if (error) { toast.error("Failed to update sale"); return }
       savedSale = data
     } else {
-      const { data, error } = await (supabase.from("sales") as any).insert(payload).select().single()
+      const { data, error } = await supabase.from("sales").insert(payload).select().single()
       if (error) { toast.error("Failed to create sale"); return }
       savedSale = data
     }
@@ -441,7 +441,7 @@ const STATUS_ICON: Record<string, { icon: React.FC<{ className?: string }>; colo
   rescheduled: { icon: CalendarCheck, color: "text-blue-500",  label: "Rescheduled" },
 }
 
-function FollowUpTab({ lead, onFollowUpAdded }: { lead: LeadDetail; onFollowUpAdded: (f: any) => void }) {
+function FollowUpTab({ lead, onFollowUpAdded }: { lead: LeadDetail; onFollowUpAdded: (f: LeadFollowUp) => void }) {
   const { activeTelemarketer } = useTelemarketerStore()
   const [showForm, setShowForm] = useState(false)
 
@@ -453,7 +453,7 @@ function FollowUpTab({ lead, onFollowUpAdded }: { lead: LeadDetail; onFollowUpAd
   async function onSubmit(values: FollowUpValues) {
     if (!activeTelemarketer) { toast.error("No telemarketer selected"); return }
     const supabase = createClient()
-    const { data, error } = await (supabase.from("followup_schedule") as any).insert({
+    const { data, error } = await supabase.from("followup_schedule").insert({
       lead_id: lead.id,
       telemarketer_id: activeTelemarketer.id,
       ...values,

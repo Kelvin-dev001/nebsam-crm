@@ -123,14 +123,14 @@ export function LeadDetailShell({ leadId }: Props) {
       .single()
       .then(({ data, error }) => {
         if (!error && data) {
-          const d = data as any
+          const d = data as unknown as LeadDetail
           setLead({
             ...d,
             call_logs: [...(d.call_logs ?? [])].sort(
-              (a: any, b: any) => new Date(b.called_at).getTime() - new Date(a.called_at).getTime()
+              (a: LeadCallLog, b: LeadCallLog) => new Date(b.called_at).getTime() - new Date(a.called_at).getTime()
             ),
             followup_schedule: [...(d.followup_schedule ?? [])].sort(
-              (a: any, b: any) => new Date(a.scheduled_date).getTime() - new Date(b.scheduled_date).getTime()
+              (a: LeadFollowUp, b: LeadFollowUp) => new Date(a.scheduled_date).getTime() - new Date(b.scheduled_date).getTime()
             ),
           })
         }
@@ -142,7 +142,7 @@ export function LeadDetailShell({ leadId }: Props) {
     if (!pendingStage || !lead) return
     setStageSaving(true)
     const supabase = createClient()
-    const { error } = await (supabase.from("leads") as any)
+    const { error } = await supabase.from("leads")
       .update({ funnel_stage: pendingStage })
       .eq("id", lead.id)
     if (error) {
@@ -159,7 +159,7 @@ export function LeadDetailShell({ leadId }: Props) {
     if (!lead) return
     setRagSaving(true)
     const supabase = createClient()
-    const { error } = await (supabase.from("leads") as any)
+    const { error } = await supabase.from("leads")
       .update({ rag_status: status })
       .eq("id", lead.id)
     if (error) {

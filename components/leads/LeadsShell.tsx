@@ -13,10 +13,11 @@ import {
   type PaginationState,
 } from "@tanstack/react-table"
 import Link from "next/link"
-import { Phone, Eye, ChevronUp, ChevronDown, ChevronsUpDown, Wifi } from "lucide-react"
+import { Phone, Eye, Wifi } from "lucide-react"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { useTelemarketerStore } from "@/lib/stores/telemarketerStore"
 import { createClient } from "@/lib/supabase/client"
+import type { LeadRow } from "@/lib/supabase/types"
 import { FunnelStage, RAGStatus } from "@/types/crm"
 import { FunnelStageBadge } from "./FunnelStageBadge"
 import { RAGBadge } from "./RAGBadge"
@@ -72,21 +73,25 @@ export function LeadsShell() {
       .then(({ data: raw }) => {
         if (!raw) { setLoading(false); return }
 
-        const processed: ProcessedLead[] = (raw as any[]).map((lead) => {
+        type RawLead = LeadRow & {
+          call_logs: Array<{ called_at: string }>
+          followup_schedule: Array<{ scheduled_date: string; status: string }>
+        }
+        const processed: ProcessedLead[] = (raw as unknown as RawLead[]).map((lead) => {
           const sortedCalls = [...(lead.call_logs ?? [])].sort(
-            (a: any, b: any) => new Date(b.called_at).getTime() - new Date(a.called_at).getTime()
+            (a, b) => new Date(b.called_at).getTime() - new Date(a.called_at).getTime()
           )
           const pendingFollowups = (lead.followup_schedule ?? [])
-            .filter((f: any) => f.status === "pending")
-            .sort((a: any, b: any) => new Date(a.scheduled_date).getTime() - new Date(b.scheduled_date).getTime())
+            .filter((f) => f.status === "pending")
+            .sort((a, b) => new Date(a.scheduled_date).getTime() - new Date(b.scheduled_date).getTime())
 
           return {
             id: lead.id,
             phone_number: lead.phone_number,
             full_name: lead.full_name,
             product_interested: lead.product_interested,
-            funnel_stage: lead.funnel_stage,
-            rag_status: lead.rag_status,
+            funnel_stage: lead.funnel_stage as FunnelStage,
+            rag_status: lead.rag_status as RAGStatus,
             lead_source: lead.lead_source,
             campaign_name: lead.campaign_name,
             location: lead.location,
@@ -103,7 +108,7 @@ export function LeadsShell() {
         setData(processed)
         setLoading(false)
       })
-  }, [activeTelemarketer?.id])
+  }, [activeTelemarketer])
 
   // Realtime subscription — new and updated leads appear instantly
   useEffect(() => {
@@ -121,7 +126,7 @@ export function LeadsShell() {
           filter: `assigned_to=eq.${activeTelemarketer.id}`,
         },
         (payload) => {
-          const raw = payload.new as any
+          const raw = payload.new as ProcessedLead
           const newLead: ProcessedLead = {
             id: raw.id,
             phone_number: raw.phone_number,
@@ -156,7 +161,7 @@ export function LeadsShell() {
           filter: `assigned_to=eq.${activeTelemarketer.id}`,
         },
         (payload) => {
-          const raw = payload.new as any
+          const raw = payload.new as ProcessedLead
           setData((prev) =>
             prev.map((lead) =>
               lead.id === raw.id
@@ -176,7 +181,7 @@ export function LeadsShell() {
       .subscribe()
 
     return () => { supabase.removeChannel(channel) }
-  }, [activeTelemarketer?.id])
+  }, [activeTelemarketer])
 
   const columns = useMemo<ColumnDef<ProcessedLead>[]>(
     () => [

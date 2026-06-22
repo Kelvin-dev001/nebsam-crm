@@ -1,6 +1,6 @@
 "use client"
 
-import { Users, LayoutList, BarChart2, UserCog, Upload, FileBarChart, ArrowRightLeft } from "lucide-react"
+import { Users, LayoutList, BarChart2, UserCog, Upload, FileBarChart } from "lucide-react"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { AllLeadsOverview } from "./AllLeadsOverview"
 import { LeadAssignment } from "./LeadAssignment"

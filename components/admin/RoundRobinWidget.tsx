@@ -6,7 +6,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { createClient } from "@/lib/supabase/client"
 import { Telemarketer } from "@/types/crm"
-import { format } from "date-fns"
 import { toast } from "sonner"
 
 const SUZZIE_ID = "33333333-3333-3333-3333-333333333333"
@@ -31,7 +30,6 @@ export function RoundRobinWidget() {
 
   const load = useCallback(async () => {
     const supabase = createClient()
-    const today = format(new Date(), "yyyy-MM-dd")
     const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0)
 
     const [telemarketersRes, rrStateRes] = await Promise.all([
@@ -160,7 +158,7 @@ export function RoundRobinWidget() {
                   </tr>
                 </thead>
                 <tbody>
-                  {data?.stats.map((s, i) => {
+                  {data?.stats.map((s) => {
                     const isNext = s.telemarketer.id === data.nextTelemarketer?.id
                     return (
                       <tr

@@ -5,7 +5,9 @@ import { Upload, FileText, X, AlertCircle, CheckCircle2, Loader2 } from "lucide-
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { createClient } from "@/lib/supabase/client"
-import { PRODUCTS } from "@/types/crm"
+import { PRODUCTS, type Product } from "@/types/crm"
+import type { Database } from "@/lib/supabase/types"
+type LeadInsert = Database["public"]["Tables"]["leads"]["Insert"]
 import { cn } from "@/lib/utils"
 
 // ── CSV parser ─────────────────────────────────────────────────────────────────
@@ -132,16 +134,16 @@ export function CSVImport() {
 
     setImporting(true)
     const supabase = createClient()
-    const leads: any[] = []
+    const leads: LeadInsert[] = []
     const skippedReasons: string[] = []
 
     rows.forEach((row, idx) => {
-      const lead: any = { lead_source: "manual" }
+      const lead: LeadInsert = { phone_number: "", lead_source: "manual" }
       headers.forEach((header, colIdx) => {
         const field = mapping[header]
         if (field && field !== "_ignore") {
           const val = row[colIdx]?.trim()
-          if (val) lead[field] = val
+          if (val) (lead as Record<string, string>)[field] = val
         }
       })
 
@@ -156,7 +158,7 @@ export function CSVImport() {
       }
 
       // Validate product if provided
-      if (lead.product_interested && !PRODUCTS.includes(lead.product_interested as any)) {
+      if (lead.product_interested && !PRODUCTS.includes(lead.product_interested as Product)) {
         lead.product_interested = null
       }
 
@@ -170,7 +172,7 @@ export function CSVImport() {
     const BATCH = 50
     for (let i = 0; i < leads.length; i += BATCH) {
       const batch = leads.slice(i, i + BATCH)
-      const { error, data } = await (supabase.from("leads") as any)
+      const { error, data } = await supabase.from("leads")
         .insert(batch)
         .select("id")
       if (error) {

@@ -19,6 +19,8 @@ import {
 } from "@/components/ui/sheet"
 import { RAGBadge } from "./RAGBadge"
 import { createClient } from "@/lib/supabase/client"
+import type { Database } from "@/lib/supabase/types"
+type LeadUpdate = Database["public"]["Tables"]["leads"]["Update"]
 import { useTelemarketerStore } from "@/lib/stores/telemarketerStore"
 import { FunnelStage, RAGStatus, FUNNEL_STAGES, FUNNEL_STAGE_LABELS, PRODUCTS } from "@/types/crm"
 import { cn } from "@/lib/utils"
@@ -167,11 +169,11 @@ export function CallLogModal({ lead, onClose, onSaved }: Props) {
         funnel_stage_after_call: newFunnelStage,
         next_followup_date: values.has_followup ? values.followup_date : null,
         next_followup_notes: values.has_followup ? values.followup_notes : null,
-      } as any)
+      })
       if (logErr) throw logErr
 
       // 2. Update lead fields
-      const leadUpdate: Record<string, unknown> = {
+      const leadUpdate: LeadUpdate = {
         rag_status: newRagStatus,
         funnel_stage: newFunnelStage,
       }
@@ -181,8 +183,7 @@ export function CallLogModal({ lead, onClose, onSaved }: Props) {
         if (values.kyc_vehicle_type) leadUpdate.vehicle_type       = values.kyc_vehicle_type
         if (values.kyc_product)      leadUpdate.product_interested = values.kyc_product
       }
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error: leadErr } = await (supabase.from("leads") as any).update(leadUpdate).eq("id", lead.id)
+      const { error: leadErr } = await supabase.from("leads").update(leadUpdate).eq("id", lead.id)
       if (leadErr) throw leadErr
 
       // 3. Create follow-up schedule if set
@@ -194,7 +195,7 @@ export function CallLogModal({ lead, onClose, onSaved }: Props) {
           scheduled_date: values.followup_date,
           notes: values.followup_notes || null,
           status: "pending",
-        } as any)
+        })
         if (fuErr) throw fuErr
       }
 

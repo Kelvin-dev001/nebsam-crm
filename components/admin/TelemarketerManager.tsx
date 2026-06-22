@@ -15,8 +15,6 @@ import {
 } from "@/components/ui/dialog"
 import { createClient } from "@/lib/supabase/client"
 import { Telemarketer } from "@/types/crm"
-import { formatDate } from "@/lib/utils/dateHelpers"
-
 type EditableTelemarketer = Pick<Telemarketer, "full_name" | "email" | "phone">
 
 const EMPTY_FORM: EditableTelemarketer = { full_name: "", email: "", phone: "" }
@@ -44,7 +42,7 @@ export function TelemarketerManager() {
     if (tmResult.data) setTelemarketers(tmResult.data as Telemarketer[])
     if (leadsResult.data) {
       const counts: Record<string, number> = {}
-      for (const l of leadsResult.data as any[]) {
+      for (const l of leadsResult.data as { assigned_to: string | null }[]) {
         if (l.assigned_to) counts[l.assigned_to] = (counts[l.assigned_to] ?? 0) + 1
       }
       setLeadCounts(counts)
@@ -78,7 +76,7 @@ export function TelemarketerManager() {
     }
 
     if (editing) {
-      const { error } = await (supabase.from("telemarketers") as any)
+      const { error } = await supabase.from("telemarketers")
         .update(payload)
         .eq("id", editing.id)
       if (error) {
@@ -91,7 +89,7 @@ export function TelemarketerManager() {
         setDialogOpen(false)
       }
     } else {
-      const { data, error } = await (supabase.from("telemarketers") as any)
+      const { data, error } = await supabase.from("telemarketers")
         .insert({ ...payload, is_active: true })
         .select()
         .single()
@@ -109,7 +107,7 @@ export function TelemarketerManager() {
   async function toggleActive(tm: Telemarketer) {
     setTogglingId(tm.id)
     const supabase = createClient()
-    const { error } = await (supabase.from("telemarketers") as any)
+    const { error } = await supabase.from("telemarketers")
       .update({ is_active: !tm.is_active })
       .eq("id", tm.id)
     if (error) {

@@ -1,4 +1,5 @@
 import type { TelemarketerReport } from "./fetchReportData"
+import type { jsPDF as JsPDFType } from "jspdf"
 
 const NAVY = "#0F1729"
 const BLUE = "#2563EB"
@@ -18,19 +19,19 @@ function hexToRgb(hex: string): [number, number, number] {
   return [r, g, b]
 }
 
-function setFill(doc: any, hex: string) {
+function setFill(doc: JsPDFType, hex: string) {
   doc.setFillColor(...hexToRgb(hex))
 }
 
-function setTextColor(doc: any, hex: string) {
+function setTextColor(doc: JsPDFType, hex: string) {
   doc.setTextColor(...hexToRgb(hex))
 }
 
-function setDrawColor(doc: any, hex: string) {
+function setDrawColor(doc: JsPDFType, hex: string) {
   doc.setDrawColor(...hexToRgb(hex))
 }
 
-function buildPage(doc: any, report: TelemarketerReport, date: string, allReports: TelemarketerReport[]) {
+function buildPage(doc: JsPDFType, report: TelemarketerReport, date: string, allReports: TelemarketerReport[]) {
   const W = 210 // A4 width mm
   const margin = 14
   let y = 0
@@ -211,7 +212,7 @@ function buildPage(doc: any, report: TelemarketerReport, date: string, allReport
 export async function generatePDF(
   reports: TelemarketerReport[],
   date: string,
-): Promise<any> {
+): Promise<JsPDFType> {
   // Dynamic import avoids SSR errors in Next.js App Router
   const { jsPDF } = await import("jspdf")
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" })

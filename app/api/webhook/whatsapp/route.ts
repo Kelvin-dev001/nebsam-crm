@@ -3,9 +3,28 @@ import { createClient } from "@supabase/supabase-js"
 
 // ── Payload extraction ─────────────────────────────────────────────────────────
 
+interface MetaMessage {
+  from?: string
+  text?: { body?: string }
+}
+interface MetaContact {
+  profile?: { name?: string }
+}
+interface MetaValue {
+  messages?: MetaMessage[]
+  contacts?: MetaContact[]
+}
+interface MetaEntry {
+  changes?: Array<{ value?: MetaValue }>
+}
+
+function getMetaValue(payload: Record<string, unknown>): MetaValue | undefined {
+  return (payload?.entry as MetaEntry[] | undefined)?.[0]?.changes?.[0]?.value
+}
+
 function extractPhone(payload: Record<string, unknown>): string | null {
-  const meta = (payload?.entry as any)?.[0]?.changes?.[0]?.value
-  if (meta?.messages?.[0]?.from) return meta.messages[0].from
+  const meta = getMetaValue(payload)
+  if (meta?.messages?.[0]?.from) return meta.messages[0].from!
   if (payload?.waId) return payload.waId as string
   return (
     (payload?.phone as string) ??
@@ -17,15 +36,15 @@ function extractPhone(payload: Record<string, unknown>): string | null {
 }
 
 function extractName(payload: Record<string, unknown>): string | null {
-  const meta = (payload?.entry as any)?.[0]?.changes?.[0]?.value
-  if (meta?.contacts?.[0]?.profile?.name) return meta.contacts[0].profile.name
+  const meta = getMetaValue(payload)
+  if (meta?.contacts?.[0]?.profile?.name) return meta.contacts[0].profile!.name!
   if (payload?.senderName) return payload.senderName as string
   return (payload?.name as string) ?? (payload?.full_name as string) ?? null
 }
 
 function extractMessage(payload: Record<string, unknown>): string | null {
-  const meta = (payload?.entry as any)?.[0]?.changes?.[0]?.value
-  if (meta?.messages?.[0]?.text?.body) return meta.messages[0].text.body
+  const meta = getMetaValue(payload)
+  if (meta?.messages?.[0]?.text?.body) return meta.messages[0].text!.body!
   return (
     (payload?.text as string) ??
     (payload?.message as string) ??

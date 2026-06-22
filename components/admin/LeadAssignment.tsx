@@ -83,7 +83,7 @@ export function LeadAssignment() {
     const supabase = createClient()
     const ids = Array.from(selected)
 
-    const { error } = await (supabase.from("leads") as any)
+    const { error } = await supabase.from("leads")
       .update({ assigned_to: assignTo })
       .in("id", ids)
 

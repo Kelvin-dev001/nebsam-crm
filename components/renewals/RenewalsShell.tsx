@@ -13,11 +13,10 @@ import {
   type PaginationState,
 } from "@tanstack/react-table"
 import Link from "next/link"
-import { CheckCircle2, XCircle, RefreshCcw, ChevronUp, ChevronDown, ChevronsUpDown } from "lucide-react"
+import { CheckCircle2, XCircle } from "lucide-react"
 import { toast } from "sonner"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { createClient } from "@/lib/supabase/client"
-import { PRODUCTS } from "@/types/crm"
 import { daysUntil, getRenewalColorClass, formatDate } from "@/lib/utils/dateHelpers"
 import { format } from "date-fns"
 import { cn } from "@/lib/utils"
@@ -100,7 +99,7 @@ export function RenewalsShell() {
         .order("full_name"),
     ]).then(([salesResult, tmResult]) => {
       if (salesResult.data) {
-        const rows = (salesResult.data as any[]).map((s): RenewalRow => {
+        const rows = (salesResult.data as RenewalRow[]).map((s): RenewalRow => {
           const days = s.renewal_due_date ? daysUntil(s.renewal_due_date) : null
           const stage = s.lead?.funnel_stage ?? "post_sale"
           return {
@@ -124,8 +123,8 @@ export function RenewalsShell() {
     const supabase = createClient()
 
     const [leadResult] = await Promise.all([
-      (supabase.from("leads") as any).update({ funnel_stage: "renewed" }).eq("id", row.lead_id),
-      (supabase.from("sales") as any).update({ renewal_reminder_sent: true }).eq("id", row.id),
+      supabase.from("leads").update({ funnel_stage: "renewed" }).eq("id", row.lead_id),
+      supabase.from("sales").update({ renewal_reminder_sent: true }).eq("id", row.id),
     ])
 
     if (leadResult.error) {
@@ -148,7 +147,7 @@ export function RenewalsShell() {
     setActionLoading(row.id + "-churned")
     const supabase = createClient()
 
-    const { error } = await (supabase.from("leads") as any)
+    const { error } = await supabase.from("leads")
       .update({ funnel_stage: "lost" })
       .eq("id", row.lead_id)
 
