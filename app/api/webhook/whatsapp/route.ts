@@ -71,8 +71,9 @@ export async function POST(request: NextRequest) {
   const message = extractMessage(payload)
   const campaign = (payload?.campaign_name as string) ?? (payload?.campaign as string) ?? null
 
+  // No phone → store unprocessed and return (BSP expects 200 always)
   if (!rawPhone) {
-    await (supabase.from("webhook_events") as any).insert({
+    await supabase.from("webhook_events").insert({
       raw_payload: payload,
       phone_number: null,
       processed: false,
@@ -82,65 +83,31 @@ export async function POST(request: NextRequest) {
 
   const phoneNumber = normalizePhone(rawPhone)
 
-  const { data: existing } = await supabase
-    .from("webhook_events")
-    .select("lead_id")
-    .eq("phone_number", phoneNumber)
-    .eq("processed", true)
-    .order("received_at", { ascending: false })
-    .limit(1)
-    .maybeSingle()
-
-  // Also check leads directly
-  const { data: existingLead } = await supabase
-    .from("leads")
-    .select("id, full_name, whatsapp_message")
-    .eq("phone_number", phoneNumber)
-    .maybeSingle()
-
-  let leadId: string
-  let isNew = false
-
-  if (existingLead) {
-    leadId = existingLead.id
-    const updates: Record<string, unknown> = {}
-    if (message) updates.whatsapp_message = message
-    if (name && !(existingLead as any).full_name) updates.full_name = name
-    if (Object.keys(updates).length > 0) {
-      await (supabase.from("leads") as any).update(updates).eq("id", leadId)
-    }
-  } else {
-    isNew = true
-    const { data: newLead, error } = await (supabase.from("leads") as any)
-      .insert({
-        phone_number: phoneNumber,
-        full_name: name,
-        whatsapp_message: message,
-        lead_source: "whatsapp_bot",
-        funnel_stage: "new",
-        rag_status: "amber",
-        campaign_name: campaign,
-      })
-      .select("id")
-      .single()
-
-    if (error || !newLead) {
-      await (supabase.from("webhook_events") as any).insert({
-        raw_payload: payload,
-        phone_number: phoneNumber,
-        processed: false,
-      })
-      return NextResponse.json({ error: error?.message ?? "Lead insert failed" }, { status: 500 })
-    }
-    leadId = newLead.id
-  }
-
-  await (supabase.from("webhook_events") as any).insert({
-    raw_payload: payload,
-    phone_number: phoneNumber,
-    processed: true,
-    lead_id: leadId,
+  // Single atomic RPC call: check existing / assign round robin / record event
+  const { data, error } = await supabase.rpc("assign_lead_round_robin", {
+    p_phone: phoneNumber,
+    p_name: name ?? null,
+    p_message: message ?? null,
+    p_campaign: campaign ?? null,
+    p_raw_payload: payload,
   })
 
-  return NextResponse.json({ received: true, processed: true, lead_id: leadId, is_new: isNew })
+  if (error) {
+    // Fallback: store unprocessed event so we don't lose the payload
+    await supabase.from("webhook_events").insert({
+      raw_payload: payload,
+      phone_number: phoneNumber,
+      processed: false,
+    })
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+
+  const result = data as { lead_id: string; is_new: boolean; assigned_to: string | null }
+  return NextResponse.json({
+    received: true,
+    processed: true,
+    lead_id: result.lead_id,
+    is_new: result.is_new,
+    assigned_to: result.assigned_to,
+  })
 }

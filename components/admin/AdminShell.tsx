@@ -1,12 +1,14 @@
 "use client"
 
-import { Users, LayoutList, BarChart2, UserCog, Upload } from "lucide-react"
+import { Users, LayoutList, BarChart2, UserCog, Upload, FileBarChart, ArrowRightLeft } from "lucide-react"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { AllLeadsOverview } from "./AllLeadsOverview"
 import { LeadAssignment } from "./LeadAssignment"
 import { PerformanceSummary } from "./PerformanceSummary"
 import { TelemarketerManager } from "./TelemarketerManager"
 import { CSVImport } from "./CSVImport"
+import { RoundRobinWidget } from "./RoundRobinWidget"
+import { ReportsTab } from "./ReportsTab"
 
 export function AdminShell() {
   return (
@@ -15,6 +17,9 @@ export function AdminShell() {
         <h1 className="text-2xl font-bold text-slate-900">Admin Panel</h1>
         <p className="text-slate-500 text-sm mt-0.5">Manage leads, telemarketers, and imports</p>
       </div>
+
+      {/* Round Robin Widget — always visible above tabs */}
+      <RoundRobinWidget />
 
       <Tabs defaultValue="overview">
         <TabsList
@@ -41,6 +46,10 @@ export function AdminShell() {
             <Upload className="h-4 w-4" />
             CSV Import
           </TabsTrigger>
+          <TabsTrigger value="reports" className="gap-1.5 px-4 pb-3 text-sm">
+            <FileBarChart className="h-4 w-4" />
+            Reports
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="mt-4">
@@ -57,6 +66,9 @@ export function AdminShell() {
         </TabsContent>
         <TabsContent value="import" className="mt-4">
           <CSVImport />
+        </TabsContent>
+        <TabsContent value="reports" className="mt-4">
+          <ReportsTab />
         </TabsContent>
       </Tabs>
     </div>

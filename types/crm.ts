@@ -168,6 +168,12 @@ export interface FollowUp {
   telemarketer?: Telemarketer
 }
 
+export interface RoundRobinState {
+  id: string
+  last_assigned_telemarketer_id: string | null
+  updated_at: string
+}
+
 export interface WebhookEvent {
   id: string
   raw_payload: Record<string, unknown>

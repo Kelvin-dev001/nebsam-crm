@@ -349,6 +349,11 @@ INSERT INTO call_logs (
   CURRENT_DATE + 6, 'Follow up on quote. She said she gets paid on Friday.',
   'amber', 'quote_sent');
 
+-- ── Round Robin State ───────────────────────────────────────
+-- Suzzie is seeded as "last assigned" so the FIRST real webhook lead goes to Sonnie.
+INSERT INTO round_robin_state (id, last_assigned_telemarketer_id) VALUES
+  ('rrr00000-0000-0000-0000-000000000001', '33333333-3333-3333-3333-333333333333');
+
 -- ── Follow-up Schedule (6) ───────────────────────────────────
 INSERT INTO followup_schedule (
   id, lead_id, sale_id, telemarketer_id,
