@@ -87,7 +87,7 @@ interface Props {
   leadId: string
 }
 
-const POST_SALE_STAGES: FunnelStage[] = ["won", "installed", "post_sale", "renewal_due", "renewed"]
+const POST_SALE_STAGES: FunnelStage[] = ["won", "installed", "post_sale", "sorted", "renewal_due", "renewed"]
 
 export function LeadDetailShell({ leadId }: Props) {
   const [lead, setLead] = useState<LeadDetail | null>(null)

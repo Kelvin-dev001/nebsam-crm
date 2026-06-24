@@ -13,7 +13,7 @@ export function isActiveLead(stage: FunnelStage): boolean {
 }
 
 export function isPostSale(stage: FunnelStage): boolean {
-  return ["won", "installed", "post_sale", "renewal_due", "renewed"].includes(stage)
+  return ["won", "installed", "post_sale", "sorted", "renewal_due", "renewed"].includes(stage)
 }
 
 export const FUNNEL_STAGE_COLORS: Record<FunnelStage, string> = {
@@ -25,6 +25,7 @@ export const FUNNEL_STAGE_COLORS: Record<FunnelStage, string> = {
   won: "bg-green-600",
   installed: "bg-green-700",
   post_sale: "bg-teal-600",
+  sorted: "bg-purple-500",
   renewal_due: "bg-orange-500",
   renewed: "bg-emerald-600",
   lost: "bg-red-600",
