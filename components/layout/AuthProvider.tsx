@@ -19,7 +19,7 @@ async function fetchLinkedTelemarketer(userId: string): Promise<Telemarketer | n
 
 export function AuthProvider() {
   const router = useRouter()
-  const { activeTelemarketer, setActiveTelemarketer } = useTelemarketerStore()
+  const { setActiveTelemarketer } = useTelemarketerStore()
 
   useEffect(() => {
     const supabase = createClient()
