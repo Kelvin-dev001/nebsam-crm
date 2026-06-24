@@ -1,4 +1,4 @@
-import { TelemarketerSwitcher } from "./TelemarketerSwitcher"
+import { UserMenu } from "./UserMenu"
 import { NotificationBell } from "./NotificationBell"
 
 export function Header() {
@@ -8,7 +8,7 @@ export function Header() {
       <div className="hidden lg:block" />
       <div className="flex items-center gap-2">
         <NotificationBell />
-        <TelemarketerSwitcher />
+        <UserMenu />
       </div>
     </header>
   )

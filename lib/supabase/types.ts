@@ -17,6 +17,7 @@ export interface Database {
           phone: string | null
           is_active: boolean
           created_at: string
+          user_id: string | null
         }
         Insert: {
           id?: string
@@ -25,6 +26,7 @@ export interface Database {
           phone?: string | null
           is_active?: boolean
           created_at?: string
+          user_id?: string | null
         }
         Update: {
           id?: string
@@ -33,6 +35,7 @@ export interface Database {
           phone?: string | null
           is_active?: boolean
           created_at?: string
+          user_id?: string | null
         }
         Relationships: []
       }

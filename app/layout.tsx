@@ -1,10 +1,9 @@
 import type { Metadata } from "next"
 import localFont from "next/font/local"
 import "./globals.css"
-import { Sidebar } from "@/components/layout/Sidebar"
-import { Header } from "@/components/layout/Header"
-import { MobileNav } from "@/components/layout/MobileNav"
+import { AppShell } from "@/components/layout/AppShell"
 import { AlarmProvider } from "@/components/layout/AlarmProvider"
+import { AuthProvider } from "@/components/layout/AuthProvider"
 import { Toaster } from "@/components/ui/sonner"
 
 const geistSans = localFont({
@@ -35,17 +34,11 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-        {/* Desktop sidebar */}
-        <Sidebar />
-        {/* Top header — full width on mobile, offset by sidebar on desktop */}
-        <Header />
-        {/* Main content — no left offset on mobile, sidebar offset on desktop */}
-        <main className="pt-16 pb-20 lg:pb-0 lg:pl-60 min-h-screen bg-white">
+        <AppShell>
           {children}
-        </main>
-        {/* Bottom tab bar — mobile only */}
-        <MobileNav />
+        </AppShell>
         <Toaster richColors />
+        <AuthProvider />
         <AlarmProvider />
       </body>
     </html>
