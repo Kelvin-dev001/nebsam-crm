@@ -13,7 +13,7 @@ import {
   type PaginationState,
 } from "@tanstack/react-table"
 import Link from "next/link"
-import { Phone, Eye, Wifi } from "lucide-react"
+import { Phone, Eye, Wifi, MessageCircle } from "lucide-react"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { useTelemarketerStore } from "@/lib/stores/telemarketerStore"
 import { createClient } from "@/lib/supabase/client"
@@ -24,6 +24,8 @@ import { RAGBadge } from "./RAGBadge"
 import { LeadFilters } from "./LeadFilters"
 import { LeadTable } from "./LeadTable"
 import { CallLogModal, type CallSavedPayload } from "./CallLogModal"
+import { ChatModal } from "@/components/chat/ChatModal"
+import type { ChatLead } from "@/components/chat/WhatsAppChat"
 import { formatDate } from "@/lib/utils/dateHelpers"
 import { isPast } from "date-fns"
 import { cn } from "@/lib/utils"
@@ -54,6 +56,7 @@ export function LeadsShell() {
   const [data, setData] = useState<ProcessedLead[]>([])
   const [loading, setLoading] = useState(true)
   const [callingLead, setCallingLead] = useState<ProcessedLead | null>(null)
+  const [chatLead,    setChatLead]    = useState<ChatLead | null>(null)
   const [globalFilter, setGlobalFilter] = useState("")
   const [sorting, setSorting] = useState<SortingState>([{ id: "updated_at", desc: true }])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
@@ -277,6 +280,15 @@ export function LeadsShell() {
               <Phone className="h-3 w-3" />
               Call Now
             </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              title="WhatsApp Chat"
+              className="h-7 w-7 p-0 text-green-600 border-green-200 hover:bg-green-50 hover:border-green-300"
+              onClick={() => setChatLead(row.original)}
+            >
+              <MessageCircle className="h-3.5 w-3.5" />
+            </Button>
             <Link
               href={`/leads/${row.original.id}`}
               className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "h-7 px-2 text-xs")}
@@ -353,6 +365,11 @@ export function LeadsShell() {
         lead={callingLead}
         onClose={() => setCallingLead(null)}
         onSaved={handleCallSaved}
+      />
+
+      <ChatModal
+        lead={chatLead}
+        onClose={() => setChatLead(null)}
       />
     </div>
   )
