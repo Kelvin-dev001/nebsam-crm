@@ -13,7 +13,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
-const ACTIVE_STAGES = ["new", "contacted", "interested", "quote_sent", "negotiating", "won", "installed", "post_sale", "renewal_due"]
+const ACTIVE_STAGES = ["new", "contacted", "interested", "quote_sent", "negotiating", "won", "installed", "post_sale", "sorted", "renewal_due"]
 
 Deno.serve(async (_req: Request) => {
   const supabase = createClient(

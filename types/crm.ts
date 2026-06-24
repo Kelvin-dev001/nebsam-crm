@@ -7,6 +7,7 @@ export type FunnelStage =
   | "won"
   | "installed"
   | "post_sale"
+  | "sorted"
   | "renewal_due"
   | "renewed"
   | "lost"
@@ -56,6 +57,7 @@ export const FUNNEL_STAGES: FunnelStage[] = [
   "won",
   "installed",
   "post_sale",
+  "sorted",
   "renewal_due",
   "renewed",
   "lost",
@@ -83,6 +85,7 @@ export const FUNNEL_STAGE_LABELS: Record<FunnelStage, string> = {
   won: "Won",
   installed: "Installed",
   post_sale: "Post-Sale",
+  sorted: "Sorted",
   renewal_due: "Renewal Due",
   renewed: "Renewed",
   lost: "Lost",

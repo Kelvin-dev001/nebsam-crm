@@ -50,7 +50,7 @@ export function PerformanceSummary() {
           full_name: tm.full_name,
           total_leads: tmLeads.length,
           calls_this_month: tmCalls.length,
-          won: tmLeads.filter((l) => ["won", "installed", "post_sale", "renewal_due", "renewed"].includes(l.funnel_stage)).length,
+          won: tmLeads.filter((l) => ["won", "installed", "post_sale", "sorted", "renewal_due", "renewed"].includes(l.funnel_stage)).length,
           green: tmLeads.filter((l) => l.rag_status === "green").length,
           amber: tmLeads.filter((l) => l.rag_status === "amber").length,
           red: tmLeads.filter((l) => l.rag_status === "red").length,
