@@ -57,7 +57,7 @@ const schema = z
     ]),
     duration_minutes: z.number().min(0).max(999).optional(),
     duration_secs: z.number().min(0).max(59).optional(),
-    call_notes: z.string().min(1, "Notes are required"),
+    call_notes: z.string().optional(),
     rag_status: z.enum(["green", "amber", "red"]),
     funnel_stage: z.string().optional(),
     update_kyc: z.boolean().default(false),
@@ -164,7 +164,7 @@ export function CallLogModal({ lead, onClose, onSaved }: Props) {
         telemarketer_id: activeTelemarketer.id,
         call_outcome: values.call_outcome,
         duration_seconds: durationSeconds || null,
-        call_notes: values.call_notes,
+        call_notes: values.call_notes || null,
         rag_status_after_call: newRagStatus,
         funnel_stage_after_call: newFunnelStage,
         next_followup_date: values.has_followup ? values.followup_date : null,
@@ -289,17 +289,14 @@ export function CallLogModal({ lead, onClose, onSaved }: Props) {
           {/* Notes */}
           <div className="space-y-1.5">
             <Label className="text-xs font-semibold text-slate-700 uppercase tracking-wide">
-              Call Notes <span className="text-red-500">*</span>
+              Call Notes
             </Label>
             <Textarea
-              rows={3}
-              placeholder="What did the client say? What was discussed?"
+              rows={4}
+              placeholder="Enter call notes, client feedback, objections, next steps..."
               {...register("call_notes")}
-              className="text-sm resize-none"
+              className="text-sm"
             />
-            {errors.call_notes && (
-              <p className="text-xs text-red-500">{errors.call_notes.message}</p>
-            )}
           </div>
 
           {/* RAG Status */}
