@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
-import { ArrowLeft, Loader2 } from "lucide-react"
+import { ArrowLeft, Loader2, MessageCircle } from "lucide-react"
 import { toast } from "sonner"
 import { Button, buttonVariants } from "@/components/ui/button"
 import {
@@ -17,6 +17,7 @@ import { FunnelStage, RAGStatus, FUNNEL_STAGES, FUNNEL_STAGE_LABELS } from "@/ty
 import { FunnelStageBadge } from "./FunnelStageBadge"
 import { RAGBadge } from "./RAGBadge"
 import { LeadDetailTabs } from "./LeadDetailTabs"
+import { WhatsAppPanel } from "./WhatsAppPanel"
 import { cn } from "@/lib/utils"
 import { formatDate } from "@/lib/utils/dateHelpers"
 
@@ -96,6 +97,7 @@ export function LeadDetailShell({ leadId }: Props) {
   const [stageSaving, setStageSaving] = useState(false)
   const [showRagPicker, setShowRagPicker] = useState(false)
   const [ragSaving, setRagSaving] = useState(false)
+  const [showWhatsApp, setShowWhatsApp] = useState(false)
 
   useEffect(() => {
     const supabase = createClient()
@@ -275,6 +277,17 @@ export function LeadDetailShell({ leadId }: Props) {
               </div>
 
               <FunnelStageBadge stage={lead.funnel_stage} />
+
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setShowWhatsApp(true)}
+                className="gap-1.5 border-green-200 text-green-700 hover:bg-green-50 hover:border-green-300"
+              >
+                <MessageCircle className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">WhatsApp Chat</span>
+                <span className="sm:hidden">Chat</span>
+              </Button>
             </div>
           </div>
         </div>
@@ -288,6 +301,13 @@ export function LeadDetailShell({ leadId }: Props) {
           onLeadUpdated={(updates) => setLead((prev) => prev && { ...prev, ...updates })}
         />
       </div>
+
+      {/* WhatsApp Chat side panel */}
+      <WhatsAppPanel
+        open={showWhatsApp}
+        onClose={() => setShowWhatsApp(false)}
+        lead={lead}
+      />
 
       {/* Funnel stage confirmation dialog */}
       <Dialog open={!!pendingStage} onOpenChange={(open: boolean) => { if (!open) setPendingStage(null) }}>

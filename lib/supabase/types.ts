@@ -289,6 +289,9 @@ export interface Database {
           processed: boolean
           lead_id: string | null
           received_at: string
+          direction: string | null
+          message_text: string | null
+          sent_at: string
         }
         Insert: {
           id?: string
@@ -297,6 +300,9 @@ export interface Database {
           processed?: boolean
           lead_id?: string | null
           received_at?: string
+          direction?: string | null
+          message_text?: string | null
+          sent_at?: string
         }
         Update: {
           id?: string
@@ -305,6 +311,9 @@ export interface Database {
           processed?: boolean
           lead_id?: string | null
           received_at?: string
+          direction?: string | null
+          message_text?: string | null
+          sent_at?: string
         }
         Relationships: [
           {
