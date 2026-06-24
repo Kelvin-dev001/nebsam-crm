@@ -4,6 +4,7 @@ import "./globals.css"
 import { Sidebar } from "@/components/layout/Sidebar"
 import { Header } from "@/components/layout/Header"
 import { MobileNav } from "@/components/layout/MobileNav"
+import { AlarmProvider } from "@/components/layout/AlarmProvider"
 import { Toaster } from "@/components/ui/sonner"
 
 const geistSans = localFont({
@@ -45,6 +46,7 @@ export default function RootLayout({
         {/* Bottom tab bar — mobile only */}
         <MobileNav />
         <Toaster richColors />
+        <AlarmProvider />
       </body>
     </html>
   )
