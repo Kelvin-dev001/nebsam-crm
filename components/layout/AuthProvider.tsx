@@ -19,10 +19,20 @@ async function fetchLinkedTelemarketer(userId: string): Promise<Telemarketer | n
 
 export function AuthProvider() {
   const router = useRouter()
-  const { setActiveTelemarketer } = useTelemarketerStore()
+  const { activeTelemarketer, setActiveTelemarketer } = useTelemarketerStore()
 
   useEffect(() => {
     const supabase = createClient()
+
+    // Guard: skip the store update if the telemarketer ID hasn't changed.
+    // This prevents useEffect([activeTelemarketer]) hooks in child components
+    // from re-firing when AuthProvider re-confirms the same telemarketer.
+    function setIfChanged(tm: Telemarketer | null) {
+      const currentId = useTelemarketerStore.getState().activeTelemarketer?.id
+      if (tm?.id !== currentId) {
+        setActiveTelemarketer(tm)
+      }
+    }
 
     async function syncSession() {
       const { data: { session } } = await supabase.auth.getSession()
@@ -36,10 +46,10 @@ export function AuthProvider() {
 
       if (role === "telemarketer") {
         const tm = await fetchLinkedTelemarketer(session.user.id)
-        setActiveTelemarketer(tm)
+        setIfChanged(tm)
       } else {
         // Admin — not linked to a specific telemarketer
-        setActiveTelemarketer(null)
+        setIfChanged(null)
       }
     }
 
@@ -58,9 +68,9 @@ export function AuthProvider() {
           const role = session.user.user_metadata?.role as string | undefined
           if (role === "telemarketer") {
             const tm = await fetchLinkedTelemarketer(session.user.id)
-            setActiveTelemarketer(tm)
+            setIfChanged(tm)
           } else {
-            setActiveTelemarketer(null)
+            setIfChanged(null)
           }
         }
       },
@@ -68,9 +78,9 @@ export function AuthProvider() {
 
     return () => subscription.unsubscribe()
   }, [setActiveTelemarketer]) // eslint-disable-line react-hooks/exhaustive-deps
-  // router intentionally excluded: router.push is stable and including it
-  // would cause this effect to re-run on every navigation, triggering
-  // a new syncSession() call and briefly clearing activeTelemarketer.
+  // router and activeTelemarketer intentionally excluded:
+  // - router: including it re-runs on every navigation (stable in Next.js App Router)
+  // - activeTelemarketer: setIfChanged reads it via getState() to avoid stale closure
 
   return null
 }
