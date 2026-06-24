@@ -212,6 +212,23 @@ export function CallLogModal({ lead, onClose, onSaved }: Props) {
       }
 
       toast.success("Call logged successfully")
+
+      // Auto-send WhatsApp installation confirmation (fire and forget)
+      if (newFunnelStage === "installed") {
+        fetch("/api/whatsapp/installed-message", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ leadId: lead.id }),
+        })
+          .then((res) =>
+            res.ok
+              ? toast.success("✅ WhatsApp confirmation sent to client")
+              : toast.warning("⚠️ Stage updated but WhatsApp message failed — please send manually"),
+          )
+          .catch(() =>
+            toast.warning("⚠️ Stage updated but WhatsApp message failed — please send manually"),
+          )
+      }
     } catch (err) {
       console.error(err)
       toast.error("Failed to save call log — please try again")

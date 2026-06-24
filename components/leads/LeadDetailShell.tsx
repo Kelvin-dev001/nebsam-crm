@@ -152,6 +152,23 @@ export function LeadDetailShell({ leadId }: Props) {
     } else {
       setLead((prev) => prev && { ...prev, funnel_stage: pendingStage })
       toast.success(`Stage updated to ${FUNNEL_STAGE_LABELS[pendingStage]}`)
+
+      // Auto-send WhatsApp installation confirmation (fire and forget)
+      if (pendingStage === "installed") {
+        fetch("/api/whatsapp/installed-message", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ leadId: lead.id }),
+        })
+          .then((res) =>
+            res.ok
+              ? toast.success("✅ WhatsApp confirmation sent to client")
+              : toast.warning("⚠️ Stage updated but WhatsApp message failed — please send manually"),
+          )
+          .catch(() =>
+            toast.warning("⚠️ Stage updated but WhatsApp message failed — please send manually"),
+          )
+      }
     }
     setStageSaving(false)
     setPendingStage(null)
