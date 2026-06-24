@@ -46,33 +46,41 @@ export interface CallSavedPayload {
 
 // ── Schema ────────────────────────────────────────────────────────────────────
 
-const schema = z
-  .object({
-    call_outcome: z.enum([
-      "answered",
-      "no_answer",
-      "busy",
-      "callback_requested",
-      "wrong_number",
-    ]),
-    duration_minutes: z.number().min(0).max(999).optional(),
-    duration_secs: z.number().min(0).max(59).optional(),
-    call_notes: z.string().optional(),
-    rag_status: z.enum(["green", "amber", "red"]),
-    funnel_stage: z.string().optional(),
-    update_kyc: z.boolean().default(false),
-    kyc_full_name: z.string().optional(),
-    kyc_location: z.string().optional(),
-    kyc_vehicle_type: z.string().optional(),
-    kyc_product: z.string().optional(),
-    has_followup: z.boolean().default(false),
-    followup_date: z.string().optional(),
-    followup_notes: z.string().optional(),
-  })
-  .refine(
-    (d) => !d.has_followup || !!d.followup_date,
-    { message: "Follow-up date is required", path: ["followup_date"] }
-  )
+// 30-minute slots 8:00 AM – 7:00 PM
+const TIME_OPTIONS = Array.from({ length: 23 }, (_, i) => {
+  const totalMins = 8 * 60 + i * 30
+  const h = Math.floor(totalMins / 60)
+  const m = totalMins % 60
+  const value = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`
+  const period = h < 12 ? "AM" : "PM"
+  const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h
+  const label = `${h12}:${String(m).padStart(2, "0")} ${period}`
+  return { value, label }
+})
+
+const schema = z.object({
+  call_outcome: z.enum([
+    "answered",
+    "no_answer",
+    "busy",
+    "callback_requested",
+    "wrong_number",
+  ]),
+  duration_minutes: z.number().min(0).max(999).optional(),
+  duration_secs:    z.number().min(0).max(59).optional(),
+  call_notes:       z.string().optional(),
+  rag_status:       z.enum(["green", "amber", "red"]),
+  funnel_stage:     z.string().optional(),
+  update_kyc:       z.boolean().default(false),
+  kyc_full_name:    z.string().optional(),
+  kyc_location:     z.string().optional(),
+  kyc_vehicle_type: z.string().optional(),
+  kyc_product:      z.string().optional(),
+  has_followup:     z.boolean().default(false),
+  followup_date:    z.string().optional().nullable(),
+  followup_time:    z.string().optional().nullable(),
+  followup_notes:   z.string().optional(),
+})
 
 type FormValues = z.infer<typeof schema>
 
@@ -137,6 +145,7 @@ export function CallLogModal({ lead, onClose, onSaved }: Props) {
         kyc_product: lead.product_interested ?? "",
         has_followup: false,
         followup_date: "",
+        followup_time: "",
         followup_notes: "",
       })
     }
@@ -188,11 +197,14 @@ export function CallLogModal({ lead, onClose, onSaved }: Props) {
 
       // 3. Create follow-up schedule if set
       if (values.has_followup && values.followup_date) {
+        // Combine date + time into a TIMESTAMPTZ string (EAT = UTC+3)
+        const time = values.followup_time ?? "09:00"
+        const scheduledDateTime = `${values.followup_date}T${time}:00+03:00`
         const { error: fuErr } = await supabase.from("followup_schedule").insert({
           lead_id: lead.id,
           telemarketer_id: activeTelemarketer.id,
           followup_type: "pre_sale",
-          scheduled_date: values.followup_date,
+          scheduled_date: scheduledDateTime,
           notes: values.followup_notes || null,
           status: "pending",
         })
@@ -414,17 +426,28 @@ export function CallLogModal({ lead, onClose, onSaved }: Props) {
             </button>
             {watchFollowup && (
               <div className="border-t border-slate-100 px-4 py-3 space-y-3 bg-slate-50">
-                <div className="space-y-1">
-                  <Label className="text-xs text-slate-600">Follow-up Date <span className="text-red-500">*</span></Label>
-                  <Input
-                    type="date"
-                    {...register("followup_date")}
-                    min={new Date().toISOString().split("T")[0]}
-                    className="h-8 text-sm"
-                  />
-                  {errors.followup_date && (
-                    <p className="text-xs text-red-500">{errors.followup_date.message}</p>
-                  )}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs text-slate-600">Date</Label>
+                    <Input
+                      type="date"
+                      {...register("followup_date")}
+                      min={new Date().toISOString().split("T")[0]}
+                      className="h-8 text-sm"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-slate-600">Time</Label>
+                    <select
+                      {...register("followup_time")}
+                      className="w-full h-8 rounded-md border border-input bg-background px-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-ring"
+                    >
+                      <option value="">— any time —</option>
+                      {TIME_OPTIONS.map((t) => (
+                        <option key={t.value} value={t.value}>{t.label}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs text-slate-600">Notes</Label>

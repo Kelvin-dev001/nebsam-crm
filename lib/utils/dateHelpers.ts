@@ -24,6 +24,15 @@ export function isOverdue(date: string | Date): boolean {
   return isPast(new Date(date))
 }
 
+export function formatFollowUpDate(date: string | Date): string {
+  const d = new Date(date)
+  const h = d.getHours(), m = d.getMinutes()
+  const isMidnight = h === 0 && m === 0
+  return isMidnight
+    ? format(d, "EEE d MMM")
+    : format(d, "EEE d MMM · h:mm a")
+}
+
 export function getRenewalColorClass(daysUntil: number): string {
   if (daysUntil < 0) return "text-red-600"
   if (daysUntil <= 30) return "text-red-500"

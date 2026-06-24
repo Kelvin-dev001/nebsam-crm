@@ -8,7 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
 import { createClient } from "@/lib/supabase/client"
 import { Telemarketer, FunnelStage, RAGStatus } from "@/types/crm"
-import { format } from "date-fns"
+import { formatFollowUpDate } from "@/lib/utils/dateHelpers"
 import { CallLogModal, type CallingLead } from "@/components/leads/CallLogModal"
 
 interface Props {
@@ -19,6 +19,7 @@ interface FollowUpItem {
   id: string
   notes: string | null
   followup_type: string
+  scheduled_date: string
   lead: {
     id: string
     full_name: string | null
@@ -35,15 +36,17 @@ export function FollowUpToday({ telemarketer }: Props) {
 
   useEffect(() => {
     const supabase = createClient()
-    const today = format(new Date(), "yyyy-MM-dd")
+    const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0)
+    const tomorrowStart = new Date(todayStart); tomorrowStart.setDate(tomorrowStart.getDate() + 1)
 
     supabase
       .from("followup_schedule")
-      .select("id, notes, followup_type, lead:leads(id, full_name, phone_number, product_interested, funnel_stage)")
+      .select("id, notes, followup_type, scheduled_date, lead:leads(id, full_name, phone_number, product_interested, funnel_stage)")
       .eq("telemarketer_id", telemarketer.id)
-      .eq("scheduled_date", today)
+      .gte("scheduled_date", todayStart.toISOString())
+      .lt("scheduled_date", tomorrowStart.toISOString())
       .eq("status", "pending")
-      .order("created_at", { ascending: true })
+      .order("scheduled_date", { ascending: true })
       .then(({ data }) => {
         setItems((data as unknown as FollowUpItem[]) ?? [])
         setLoading(false)
@@ -93,7 +96,7 @@ export function FollowUpToday({ telemarketer }: Props) {
                   {item.lead?.full_name ?? item.lead?.phone_number}
                 </p>
                 <p className="text-xs text-slate-500 truncate">
-                  {item.lead?.product_interested ?? "No product"} &middot; {item.notes ?? "No notes"}
+                  {formatFollowUpDate(item.scheduled_date)} &middot; {item.notes ?? item.lead?.product_interested ?? "No notes"}
                 </p>
               </div>
               <Button

@@ -20,7 +20,7 @@ import { PRODUCTS, type FunnelStage, type RAGStatus } from "@/types/crm"
 import { RAGBadge } from "./RAGBadge"
 import { FunnelStageBadge } from "./FunnelStageBadge"
 import { type LeadDetail, type LeadSale, type LeadFollowUp } from "./LeadDetailShell"
-import { formatDate, formatDateTime, formatRelative } from "@/lib/utils/dateHelpers"
+import { formatDate, formatFollowUpDate, formatDateTime, formatRelative } from "@/lib/utils/dateHelpers"
 import { cn } from "@/lib/utils"
 import type { Resolver } from "react-hook-form"
 
@@ -427,8 +427,20 @@ function SaleDetailsTab({
 
 // ─── Follow-up Schedule Tab ────────────────────────────────────────────────────
 
+// 30-minute slots 8:00 AM – 7:00 PM (same as CallLogModal)
+const FOLLOW_UP_TIMES = Array.from({ length: 23 }, (_, i) => {
+  const totalMins = 8 * 60 + i * 30
+  const h = Math.floor(totalMins / 60)
+  const m = totalMins % 60
+  const value = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`
+  const period = h < 12 ? "AM" : "PM"
+  const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h
+  return { value, label: `${h12}:${String(m).padStart(2, "0")} ${period}` }
+})
+
 const followUpSchema = z.object({
   scheduled_date: z.string().min(1, "Date is required"),
+  scheduled_time: z.string().optional(),
   followup_type: z.enum(["pre_sale", "post_sale_renewal", "check_in"]),
   notes: z.string().optional(),
 })
@@ -447,16 +459,19 @@ function FollowUpTab({ lead, onFollowUpAdded }: { lead: LeadDetail; onFollowUpAd
 
   const { register, handleSubmit, reset, formState: { isSubmitting, errors } } = useForm<FollowUpValues>({
     resolver: zodResolver(followUpSchema) as Resolver<FollowUpValues>,
-    defaultValues: { scheduled_date: "", followup_type: "pre_sale", notes: "" },
+    defaultValues: { scheduled_date: "", scheduled_time: "", followup_type: "pre_sale", notes: "" },
   })
 
   async function onSubmit(values: FollowUpValues) {
     if (!activeTelemarketer) { toast.error("No telemarketer selected"); return }
     const supabase = createClient()
+    const time = values.scheduled_time || "09:00"
+    const scheduledDateTime = `${values.scheduled_date}T${time}:00+03:00`
     const { data, error } = await supabase.from("followup_schedule").insert({
       lead_id: lead.id,
       telemarketer_id: activeTelemarketer.id,
-      ...values,
+      scheduled_date: scheduledDateTime,
+      followup_type: values.followup_type,
       notes: values.notes || null,
       status: "pending",
     }).select().single()
@@ -490,6 +505,18 @@ function FollowUpTab({ lead, onFollowUpAdded }: { lead: LeadDetail; onFollowUpAd
                   <Label className="text-xs text-slate-600">Date <span className="text-red-500">*</span></Label>
                   <Input type="date" {...register("scheduled_date")} className="h-8 text-sm" min={new Date().toISOString().split("T")[0]} />
                   {errors.scheduled_date && <p className="text-xs text-red-500">{errors.scheduled_date.message}</p>}
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-slate-600">Time</Label>
+                  <select
+                    {...register("scheduled_time")}
+                    className="w-full h-8 rounded-md border border-input bg-background px-2 text-sm focus:outline-none"
+                  >
+                    <option value="">9:00 AM (default)</option>
+                    {FOLLOW_UP_TIMES.map((t) => (
+                      <option key={t.value} value={t.value}>{t.label}</option>
+                    ))}
+                  </select>
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs text-slate-600">Type</Label>
@@ -535,7 +562,7 @@ function FollowUpTab({ lead, onFollowUpAdded }: { lead: LeadDetail; onFollowUpAd
                 <Icon className={cn("h-4 w-4 shrink-0 mt-0.5", cfg.color)} />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <p className="text-sm font-medium text-slate-800">{formatDate(fu.scheduled_date)}</p>
+                    <p className="text-sm font-medium text-slate-800">{formatFollowUpDate(fu.scheduled_date)}</p>
                     <Badge variant="secondary" className="text-xs px-1.5 py-0">{typeLabel}</Badge>
                     <span className={cn("text-xs font-medium", cfg.color)}>{cfg.label}</span>
                   </div>
