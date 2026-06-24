@@ -67,7 +67,10 @@ export function AuthProvider() {
     )
 
     return () => subscription.unsubscribe()
-  }, [router, setActiveTelemarketer])
+  }, [setActiveTelemarketer]) // eslint-disable-line react-hooks/exhaustive-deps
+  // router intentionally excluded: router.push is stable and including it
+  // would cause this effect to re-run on every navigation, triggering
+  // a new syncSession() call and briefly clearing activeTelemarketer.
 
   return null
 }
