@@ -198,7 +198,9 @@ export function WhatsAppChat({ lead, mode }: Props) {
 
     if (!res?.ok) {
       setMessages((prev) => prev.filter((m) => m.id !== optimisticId))
-      toast.error("Failed to send — check BSP configuration")
+      // Show the actual error from the server instead of a generic message
+      const errData = res ? (await res.json().catch(() => ({})) as { error?: string }) : {}
+      toast.error(errData.error ?? "Failed to send — check BSP configuration")
       setText(trimmed)
       return
     }

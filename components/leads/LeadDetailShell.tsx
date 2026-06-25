@@ -160,11 +160,14 @@ export function LeadDetailShell({ leadId }: Props) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ leadId: lead.id }),
         })
-          .then((res) =>
-            res.ok
-              ? toast.success("✅ WhatsApp confirmation sent to client")
-              : toast.warning("⚠️ Stage updated but WhatsApp message failed — please send manually"),
-          )
+          .then(async (res) => {
+            if (res.ok) {
+              toast.success("✅ WhatsApp confirmation sent to client")
+            } else {
+              const d = await res.json().catch(() => ({})) as { error?: string }
+              toast.warning(`⚠️ Stage updated but WhatsApp failed: ${d.error ?? "please send manually"}`)
+            }
+          })
           .catch(() =>
             toast.warning("⚠️ Stage updated but WhatsApp message failed — please send manually"),
           )

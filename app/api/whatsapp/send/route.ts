@@ -1,6 +1,19 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
 
+// ── Phone normalisation ───────────────────────────────────────────────────────
+// Strips all non-digits, converts 07xx → 2547xx, removes leading +
+
+function normalizePhone(phone: string): string {
+  const digits = phone.replace(/\D/g, "")
+  if (digits.startsWith("0"))   return "254" + digits.slice(1)
+  if (digits.startsWith("254")) return digits
+  if (digits.startsWith("7") && digits.length === 9) return "254" + digits
+  return digits
+}
+
+// ── Handler ───────────────────────────────────────────────────────────────────
+
 export async function POST(request: NextRequest) {
   let body: { to: string; message: string }
   try {
@@ -14,41 +27,83 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "to and message are required" }, { status: 400 })
   }
 
-  const bspUrl    = process.env.WHATSAPP_BSP_URL
-  const sender    = process.env.WHATSAPP_SENDER
-  const supabase  = createClient(
+  // ── Env-var check ──────────────────────────────────────────────────────────
+  const bspUrl = process.env.WHATSAPP_BSP_URL
+  const sender = process.env.WHATSAPP_SENDER
+
+  console.log("=== WHATSAPP SEND DEBUG ===")
+  console.log("BSP URL configured:", !!bspUrl, bspUrl ?? "(missing)")
+  console.log("SENDER configured:", !!sender, sender ? `${sender.slice(0, 4)}...` : "(missing)")
+
+  if (!bspUrl) {
+    return NextResponse.json(
+      { error: "WHATSAPP_BSP_URL environment variable is not configured" },
+      { status: 500 },
+    )
+  }
+  if (!sender) {
+    return NextResponse.json(
+      { error: "WHATSAPP_SENDER environment variable is not configured — set this in Vercel project settings" },
+      { status: 500 },
+    )
+  }
+
+  const toNormalised = normalizePhone(to)
+  const payload = {
+    sender,
+    to: toNormalised,
+    type: "text",
+    data: { preview_url: false, body: message.trim() },
+  }
+
+  console.log("To (raw):", to, "→ normalised:", toNormalised)
+  console.log("Payload:", JSON.stringify(payload, null, 2))
+
+  // ── BSP call ───────────────────────────────────────────────────────────────
+  try {
+    const bspRes = await fetch(bspUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Accept": "application/json" },
+      body: JSON.stringify(payload),
+    })
+
+    const responseText = await bspRes.text()
+    console.log("BSP response status:", bspRes.status)
+    console.log("BSP response body:", responseText)
+    console.log("==========================")
+
+    if (!bspRes.ok) {
+      // Try to parse JSON error from BSP for a clean message
+      let bspMessage = responseText
+      try {
+        const parsed = JSON.parse(responseText)
+        bspMessage = parsed.message ?? parsed.error ?? responseText
+      } catch { /* use raw text */ }
+
+      return NextResponse.json(
+        {
+          error: `Jaza Africa error (${bspRes.status}): ${bspMessage}`,
+          bsp_status: bspRes.status,
+          bsp_body: responseText,
+        },
+        { status: 502 },
+      )
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    console.error("BSP fetch exception:", msg)
+    return NextResponse.json(
+      { error: `BSP unreachable: ${msg}` },
+      { status: 502 },
+    )
+  }
+
+  // ── Log outgoing message to webhook_events ─────────────────────────────────
+  const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
   )
 
-  // Call BSP API if credentials are configured
-  if (bspUrl && sender) {
-    try {
-      const bspRes = await fetch(bspUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sender,
-          to: to.replace(/^\+/, ""),   // BSP expects number without leading +
-          type: "text",
-          data: { preview_url: false, body: message.trim() },
-        }),
-      })
-      if (!bspRes.ok) {
-        const errText = await bspRes.text().catch(() => "")
-        console.error("BSP API error:", bspRes.status, errText)
-        return NextResponse.json(
-          { error: `BSP returned ${bspRes.status}`, detail: errText },
-          { status: 502 },
-        )
-      }
-    } catch (err) {
-      console.error("BSP fetch failed:", err)
-      return NextResponse.json({ error: "BSP unreachable" }, { status: 502 })
-    }
-  }
-
-  // Log the outgoing message in webhook_events
   const { data: event, error: dbErr } = await supabase
     .from("webhook_events")
     .insert({
