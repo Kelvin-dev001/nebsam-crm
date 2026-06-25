@@ -30,10 +30,12 @@ export async function POST(request: NextRequest) {
   // ── Env-var check ──────────────────────────────────────────────────────────
   const bspUrl = process.env.WHATSAPP_BSP_URL
   const sender = process.env.WHATSAPP_SENDER
+  const apiKey = process.env.WHATSAPP_API_KEY
 
   console.log("=== WHATSAPP SEND DEBUG ===")
   console.log("BSP URL configured:", !!bspUrl, bspUrl ?? "(missing)")
-  console.log("SENDER configured:", !!sender, sender ? `${sender.slice(0, 4)}...` : "(missing)")
+  console.log("SENDER configured:", !!sender, sender ? `${sender.slice(0, 6)}...` : "(missing)")
+  console.log("API KEY configured:", !!apiKey, apiKey ? `${apiKey.slice(0, 8)}... (${apiKey.length} chars)` : "(missing)")
 
   if (!bspUrl) {
     return NextResponse.json(
@@ -44,6 +46,12 @@ export async function POST(request: NextRequest) {
   if (!sender) {
     return NextResponse.json(
       { error: "WHATSAPP_SENDER environment variable is not configured — set this in Vercel project settings" },
+      { status: 500 },
+    )
+  }
+  if (!apiKey) {
+    return NextResponse.json(
+      { error: "WHATSAPP_API_KEY environment variable is not configured — set this in Vercel project settings" },
       { status: 500 },
     )
   }
@@ -63,7 +71,11 @@ export async function POST(request: NextRequest) {
   try {
     const bspRes = await fetch(bspUrl, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "Accept": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "Authorization": "Bearer " + apiKey,
+      },
       body: JSON.stringify(payload),
     })
 

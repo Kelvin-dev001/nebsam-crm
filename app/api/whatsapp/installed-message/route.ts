@@ -74,6 +74,7 @@ export async function POST(request: NextRequest) {
   // 5. Call BSP API (non-blocking — failures are logged, not returned as errors)
   const bspUrl = process.env.WHATSAPP_BSP_URL
   const sender = process.env.WHATSAPP_SENDER
+  const apiKey = process.env.WHATSAPP_API_KEY
   const toNumber = normalisePhone(lead.phone_number)
   let bspOk = false
 
@@ -81,7 +82,11 @@ export async function POST(request: NextRequest) {
     try {
       const bspRes = await fetch(bspUrl, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+          ...(apiKey ? { "Authorization": "Bearer " + apiKey } : {}),
+        },
         body: JSON.stringify({
           sender,
           to: toNumber,

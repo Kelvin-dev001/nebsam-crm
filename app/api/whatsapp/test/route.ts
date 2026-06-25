@@ -16,14 +16,17 @@ export async function GET() {
   const bspUrl = process.env.WHATSAPP_BSP_URL
   const sender = process.env.WHATSAPP_SENDER
 
+  const apiKey = process.env.WHATSAPP_API_KEY
+
   const config = {
-    WHATSAPP_BSP_URL: bspUrl   ? `${bspUrl.slice(0, 30)}…` : "NOT SET ❌",
-    WHATSAPP_SENDER: sender    ? `${sender.slice(0, 4)}… (${sender.length} chars)` : "NOT SET ❌",
-    NEXT_PUBLIC_SUPABASE_URL:  process.env.NEXT_PUBLIC_SUPABASE_URL ? "SET ✅" : "NOT SET ❌",
+    WHATSAPP_BSP_URL:  bspUrl  ? `${bspUrl.slice(0, 30)}…` : "NOT SET ❌",
+    WHATSAPP_SENDER:   sender  ? `${sender} ✅` : "NOT SET ❌",
+    WHATSAPP_API_KEY:  apiKey  ? `${apiKey.slice(0, 8)}… (${apiKey.length} chars) ✅` : "NOT SET ❌",
+    NEXT_PUBLIC_SUPABASE_URL:  process.env.NEXT_PUBLIC_SUPABASE_URL  ? "SET ✅" : "NOT SET ❌",
     SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY ? "SET ✅" : "NOT SET ❌",
   }
 
-  if (!bspUrl || !sender) {
+  if (!bspUrl || !sender || !apiKey) {
     return NextResponse.json({ status: "misconfigured", config }, { status: 200 })
   }
 
@@ -41,7 +44,11 @@ export async function GET() {
   try {
     const res = await fetch(bspUrl, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "Accept": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "Authorization": "Bearer " + apiKey,
+      },
       body: JSON.stringify(payload),
     })
     const text = await res.text()
