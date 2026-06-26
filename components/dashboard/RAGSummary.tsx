@@ -61,6 +61,9 @@ export function RAGSummary({ telemarketer }: Props) {
       supabase.from("leads").select("*", { count: "exact", head: true }).eq("assigned_to", telemarketer.id).eq("rag_status", "red"),
     ]).then(([g, a, r]) => {
       setCounts({ green: g.count ?? 0, amber: a.count ?? 0, red: r.count ?? 0 })
+    }).catch((err) => {
+      console.error("RAGSummary fetch failed:", err)
+      setCounts({ green: 0, amber: 0, red: 0 })
     })
   }, [telemarketer.id])
 
