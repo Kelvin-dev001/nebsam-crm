@@ -56,6 +56,9 @@ export function StatsCards({ telemarketer }: Props) {
         followupsDue: followups.count ?? 0,
         salesThisMonth: sales.count ?? 0,
       })
+    }).catch((err) => {
+      console.error("StatsCards fetch failed:", err)
+      setStats({ totalLeads: 0, callsToday: 0, followupsDue: 0, salesThisMonth: 0 })
     })
   }, [telemarketer.id])
 

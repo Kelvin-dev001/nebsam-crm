@@ -68,13 +68,15 @@ export function LeadsShell() {
     const supabase = createClient()
     setLoading(true)
 
-    supabase
-      .from("leads")
-      .select("*, call_logs(called_at, call_outcome), followup_schedule(scheduled_date, status)")
-      .eq("assigned_to", activeTelemarketer.id)
-      .order("updated_at", { ascending: false })
-      .then(({ data: raw }) => {
-        if (!raw) { setLoading(false); return }
+    ;(async () => {
+      try {
+        const { data: raw, error } = await supabase
+          .from("leads")
+          .select("*, call_logs(called_at, call_outcome), followup_schedule(scheduled_date, status)")
+          .eq("assigned_to", activeTelemarketer.id)
+          .order("updated_at", { ascending: false })
+        if (error) console.error("LeadsShell fetch error:", error)
+        if (!raw) return
 
         type RawLead = LeadRow & {
           call_logs: Array<{ called_at: string }>
@@ -109,8 +111,12 @@ export function LeadsShell() {
         })
 
         setData(processed)
+      } catch (err) {
+        console.error("LeadsShell fetch failed:", err)
+      } finally {
         setLoading(false)
-      })
+      }
+    })()
   }, [activeTelemarketer])
 
   // Realtime subscription — new and updated leads appear instantly

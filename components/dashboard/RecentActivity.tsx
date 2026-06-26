@@ -44,16 +44,22 @@ export function RecentActivity({ telemarketer }: Props) {
   useEffect(() => {
     const supabase = createClient()
 
-    supabase
-      .from("call_logs")
-      .select("id, called_at, call_outcome, call_notes, duration_seconds, lead:leads(full_name, phone_number)")
-      .eq("telemarketer_id", telemarketer.id)
-      .order("called_at", { ascending: false })
-      .limit(5)
-      .then(({ data }) => {
+    ;(async () => {
+      try {
+        const { data, error } = await supabase
+          .from("call_logs")
+          .select("id, called_at, call_outcome, call_notes, duration_seconds, lead:leads(full_name, phone_number)")
+          .eq("telemarketer_id", telemarketer.id)
+          .order("called_at", { ascending: false })
+          .limit(5)
+        if (error) console.error("RecentActivity fetch error:", error)
         setItems((data as unknown as ActivityItem[]) ?? [])
+      } catch (err) {
+        console.error("RecentActivity fetch failed:", err)
+      } finally {
         setLoading(false)
-      })
+      }
+    })()
   }, [telemarketer.id])
 
   return (

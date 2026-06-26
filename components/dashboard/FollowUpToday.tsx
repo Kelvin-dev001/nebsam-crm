@@ -39,18 +39,24 @@ export function FollowUpToday({ telemarketer }: Props) {
     const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0)
     const tomorrowStart = new Date(todayStart); tomorrowStart.setDate(tomorrowStart.getDate() + 1)
 
-    supabase
-      .from("followup_schedule")
-      .select("id, notes, followup_type, scheduled_date, lead:leads(id, full_name, phone_number, product_interested, funnel_stage)")
-      .eq("telemarketer_id", telemarketer.id)
-      .gte("scheduled_date", todayStart.toISOString())
-      .lt("scheduled_date", tomorrowStart.toISOString())
-      .eq("status", "pending")
-      .order("scheduled_date", { ascending: true })
-      .then(({ data }) => {
+    ;(async () => {
+      try {
+        const { data, error } = await supabase
+          .from("followup_schedule")
+          .select("id, notes, followup_type, scheduled_date, lead:leads(id, full_name, phone_number, product_interested, funnel_stage)")
+          .eq("telemarketer_id", telemarketer.id)
+          .gte("scheduled_date", todayStart.toISOString())
+          .lt("scheduled_date", tomorrowStart.toISOString())
+          .eq("status", "pending")
+          .order("scheduled_date", { ascending: true })
+        if (error) console.error("FollowUpToday fetch error:", error)
         setItems((data as unknown as FollowUpItem[]) ?? [])
+      } catch (err) {
+        console.error("FollowUpToday fetch failed:", err)
+      } finally {
         setLoading(false)
-      })
+      }
+    })()
   }, [telemarketer.id])
 
   return (

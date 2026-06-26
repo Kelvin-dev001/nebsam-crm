@@ -30,18 +30,24 @@ export function UpcomingRenewals({ telemarketer }: Props) {
     const today = format(new Date(), "yyyy-MM-dd")
     const in60Days = format(addDays(new Date(), 60), "yyyy-MM-dd")
 
-    supabase
-      .from("sales")
-      .select("id, product, renewal_due_date, sale_amount, lead:leads(full_name, phone_number)")
-      .eq("telemarketer_id", telemarketer.id)
-      .gte("renewal_due_date", today)
-      .lte("renewal_due_date", in60Days)
-      .order("renewal_due_date", { ascending: true })
-      .limit(8)
-      .then(({ data }) => {
+    ;(async () => {
+      try {
+        const { data, error } = await supabase
+          .from("sales")
+          .select("id, product, renewal_due_date, sale_amount, lead:leads(full_name, phone_number)")
+          .eq("telemarketer_id", telemarketer.id)
+          .gte("renewal_due_date", today)
+          .lte("renewal_due_date", in60Days)
+          .order("renewal_due_date", { ascending: true })
+          .limit(8)
+        if (error) console.error("UpcomingRenewals fetch error:", error)
         setItems((data as unknown as RenewalItem[]) ?? [])
+      } catch (err) {
+        console.error("UpcomingRenewals fetch failed:", err)
+      } finally {
         setLoading(false)
-      })
+      }
+    })()
   }, [telemarketer.id])
 
   return (
