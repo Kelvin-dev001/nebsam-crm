@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { useForm, type Resolver } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
@@ -45,6 +45,8 @@ export interface CallSavedPayload {
   callOutcome: string
   callNote: string | null
   calledAt: string
+  /** TIMESTAMPTZ of the newly scheduled follow-up, or null if none set. */
+  nextFollowup: string | null
 }
 
 // ── Schema ────────────────────────────────────────────────────────────────────
@@ -74,12 +76,10 @@ const schema = z.object({
   call_notes:       z.string().optional(),
   rag_status:       z.enum(["green", "amber", "red"]),
   funnel_stage:     z.string().optional(),
-  update_kyc:       z.boolean().default(false),
   kyc_full_name:    z.string().optional(),
   kyc_location:     z.string().optional(),
   kyc_vehicle_type: z.string().optional(),
   kyc_product:      z.string().optional(),
-  has_followup:     z.boolean().default(false),
   followup_date:    z.string().optional().nullable(),
   followup_time:    z.string().optional().nullable(),
   followup_notes:   z.string().optional(),
@@ -93,6 +93,9 @@ interface Props {
   lead: CallingLead | null
   onClose: () => void
   onSaved: (payload: CallSavedPayload) => void
+  /** Attribute the call/follow-up to this telemarketer instead of the active one.
+   *  Used by the admin all-reps backlog so calls land on the lead's owner. */
+  actingTelemarketerId?: string | null
 }
 
 const OUTCOME_OPTIONS = [
@@ -103,8 +106,15 @@ const OUTCOME_OPTIONS = [
   { value: "wrong_number",       label: "Wrong Number" },
 ]
 
-export function CallLogModal({ lead, onClose, onSaved }: Props) {
+export function CallLogModal({ lead, onClose, onSaved, actingTelemarketerId }: Props) {
   const { activeTelemarketer } = useTelemarketerStore()
+  // Attribute writes to the passed-in rep (admin all-reps backlog) or the active one.
+  const actingId = actingTelemarketerId ?? activeTelemarketer?.id ?? null
+  // Toggles are plain React state — NOT react-hook-form fields. setValue-only RHF
+  // fields silently collapse to their default at submit, which previously dropped
+  // every follow-up and KYC update.
+  const [updateKyc, setUpdateKyc] = useState(false)
+  const [hasFollowup, setHasFollowup] = useState(false)
 
   const {
     register,
@@ -122,18 +132,16 @@ export function CallLogModal({ lead, onClose, onSaved }: Props) {
       call_notes: "",
       rag_status: undefined,
       funnel_stage: undefined,
-      update_kyc: false,
-      has_followup: false,
     },
   })
 
   const watchRag = watch("rag_status")
-  const watchKyc = watch("update_kyc")
-  const watchFollowup = watch("has_followup")
 
   // Reset form with lead defaults whenever the modal opens
   useEffect(() => {
     if (lead) {
+      setUpdateKyc(false)
+      setHasFollowup(false)
       reset({
         call_outcome: undefined,
         duration_minutes: 0,
@@ -141,12 +149,10 @@ export function CallLogModal({ lead, onClose, onSaved }: Props) {
         call_notes: "",
         rag_status: lead.rag_status,
         funnel_stage: lead.funnel_stage,
-        update_kyc: false,
         kyc_full_name: lead.full_name ?? "",
         kyc_location: lead.location ?? "",
         kyc_vehicle_type: lead.vehicle_type ?? "",
         kyc_product: lead.product_interested ?? "",
-        has_followup: false,
         followup_date: "",
         followup_time: "",
         followup_notes: "",
@@ -155,10 +161,17 @@ export function CallLogModal({ lead, onClose, onSaved }: Props) {
   }, [lead, reset])
 
   async function onSubmit(values: FormValues) {
-    if (!lead || !activeTelemarketer) return
+    if (!lead || !actingId) return
 
     const newFunnelStage = (values.funnel_stage as FunnelStage | undefined) ?? lead.funnel_stage
     const newRagStatus = values.rag_status
+
+    // Combine follow-up date + time into a TIMESTAMPTZ string (EAT = UTC+3)
+    const followupTime = values.followup_time || "09:00"
+    const scheduledDateTime =
+      hasFollowup && values.followup_date
+        ? `${values.followup_date}T${followupTime}:00+03:00`
+        : null
 
     // Optimistic: update the parent immediately and close
     onSaved({
@@ -168,6 +181,7 @@ export function CallLogModal({ lead, onClose, onSaved }: Props) {
       callOutcome: values.call_outcome,
       callNote: values.call_notes || null,
       calledAt: new Date().toISOString(),
+      nextFollowup: scheduledDateTime,
     })
     onClose()
 
@@ -180,14 +194,14 @@ export function CallLogModal({ lead, onClose, onSaved }: Props) {
       // 1. Create call log
       const { error: logErr } = await supabase.from("call_logs").insert({
         lead_id: lead.id,
-        telemarketer_id: activeTelemarketer.id,
+        telemarketer_id: actingId,
         call_outcome: values.call_outcome,
         duration_seconds: durationSeconds || null,
         call_notes: values.call_notes || null,
         rag_status_after_call: newRagStatus,
         funnel_stage_after_call: newFunnelStage,
-        next_followup_date: values.has_followup ? values.followup_date : null,
-        next_followup_notes: values.has_followup ? values.followup_notes : null,
+        next_followup_date: hasFollowup ? values.followup_date : null,
+        next_followup_notes: hasFollowup ? values.followup_notes : null,
       })
       if (logErr) throw logErr
 
@@ -196,7 +210,7 @@ export function CallLogModal({ lead, onClose, onSaved }: Props) {
         rag_status: newRagStatus,
         funnel_stage: newFunnelStage,
       }
-      if (values.update_kyc) {
+      if (updateKyc) {
         if (values.kyc_full_name)    leadUpdate.full_name          = values.kyc_full_name
         if (values.kyc_location)     leadUpdate.location           = values.kyc_location
         if (values.kyc_vehicle_type) leadUpdate.vehicle_type       = values.kyc_vehicle_type
@@ -206,13 +220,10 @@ export function CallLogModal({ lead, onClose, onSaved }: Props) {
       if (leadErr) throw leadErr
 
       // 3. Create follow-up schedule if set
-      if (values.has_followup && values.followup_date) {
-        // Combine date + time into a TIMESTAMPTZ string (EAT = UTC+3)
-        const time = values.followup_time ?? "09:00"
-        const scheduledDateTime = `${values.followup_date}T${time}:00+03:00`
+      if (scheduledDateTime) {
         const { error: fuErr } = await supabase.from("followup_schedule").insert({
           lead_id: lead.id,
-          telemarketer_id: activeTelemarketer.id,
+          telemarketer_id: actingId,
           followup_type: "pre_sale",
           scheduled_date: scheduledDateTime,
           notes: values.followup_notes || null,
@@ -392,21 +403,21 @@ export function CallLogModal({ lead, onClose, onSaved }: Props) {
           <div className="rounded-lg border border-slate-200 overflow-hidden">
             <button
               type="button"
-              onClick={() => setValue("update_kyc", !watchKyc)}
+              onClick={() => setUpdateKyc((v) => !v)}
               className="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-50 transition-colors"
             >
               <span className="text-sm font-medium text-slate-700">Update KYC during call?</span>
               <div className={cn(
                 "relative h-5 w-9 rounded-full transition-colors",
-                watchKyc ? "bg-blue-600" : "bg-slate-200"
+                updateKyc ? "bg-blue-600" : "bg-slate-200"
               )}>
                 <div className={cn(
                   "absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform",
-                  watchKyc ? "translate-x-4" : "translate-x-0.5"
+                  updateKyc ? "translate-x-4" : "translate-x-0.5"
                 )} />
               </div>
             </button>
-            {watchKyc && (
+            {updateKyc && (
               <div className="border-t border-slate-100 px-4 py-3 space-y-3 bg-slate-50">
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
@@ -440,21 +451,21 @@ export function CallLogModal({ lead, onClose, onSaved }: Props) {
           <div className="rounded-lg border border-slate-200 overflow-hidden">
             <button
               type="button"
-              onClick={() => setValue("has_followup", !watchFollowup)}
+              onClick={() => setHasFollowup((v) => !v)}
               className="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-50 transition-colors"
             >
               <span className="text-sm font-medium text-slate-700">Schedule next follow-up?</span>
               <div className={cn(
                 "relative h-5 w-9 rounded-full transition-colors",
-                watchFollowup ? "bg-blue-600" : "bg-slate-200"
+                hasFollowup ? "bg-blue-600" : "bg-slate-200"
               )}>
                 <div className={cn(
                   "absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform",
-                  watchFollowup ? "translate-x-4" : "translate-x-0.5"
+                  hasFollowup ? "translate-x-4" : "translate-x-0.5"
                 )} />
               </div>
             </button>
-            {watchFollowup && (
+            {hasFollowup && (
               <div className="border-t border-slate-100 px-4 py-3 space-y-3 bg-slate-50">
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">

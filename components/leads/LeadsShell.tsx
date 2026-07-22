@@ -281,7 +281,8 @@ export function LeadsShell() {
         cell: ({ row }) => {
           const d = row.original.next_followup
           if (!d) return <span className="text-slate-400 text-xs">—</span>
-          const overdue = isPast(new Date(d + "T00:00:00"))
+          // scheduled_date is a full TIMESTAMPTZ — parse it directly.
+          const overdue = isPast(new Date(d))
           return (
             <span className={cn("text-xs font-medium whitespace-nowrap", overdue ? "text-red-600" : "text-slate-600")}>
               {formatDate(d)}
@@ -373,7 +374,7 @@ export function LeadsShell() {
     },
   })
 
-  function handleCallSaved({ leadId, ragStatus, funnelStage, callOutcome, callNote, calledAt }: CallSavedPayload) {
+  function handleCallSaved({ leadId, ragStatus, funnelStage, callOutcome, callNote, calledAt, nextFollowup }: CallSavedPayload) {
     setData((prev) =>
       prev.map((lead) =>
         lead.id === leadId
@@ -382,6 +383,7 @@ export function LeadsShell() {
               rag_status: ragStatus,
               funnel_stage: funnelStage,
               last_called: calledAt,
+              next_followup: nextFollowup ?? lead.next_followup,
               call_count: lead.call_count + 1,
               call_history: [
                 { called_at: calledAt, call_outcome: callOutcome, call_notes: callNote },

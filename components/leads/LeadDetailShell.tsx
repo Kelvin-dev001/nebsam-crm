@@ -17,6 +17,7 @@ import { FunnelStage, RAGStatus, FUNNEL_STAGES, FUNNEL_STAGE_LABELS } from "@/ty
 import { FunnelStageBadge } from "./FunnelStageBadge"
 import { RAGBadge } from "./RAGBadge"
 import { LeadDetailTabs } from "./LeadDetailTabs"
+import { LeadSummaryBar } from "./LeadSummaryBar"
 import { WhatsAppPanel } from "./WhatsAppPanel"
 import { cn } from "@/lib/utils"
 import { formatDate } from "@/lib/utils/dateHelpers"
@@ -315,6 +316,7 @@ export function LeadDetailShell({ leadId }: Props) {
 
       {/* Tab content */}
       <div className="flex-1 px-4 lg:px-6 py-4">
+        <LeadSummaryBar lead={lead} />
         <LeadDetailTabs
           lead={lead}
           isPostSale={isPostSale}

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
-import { Phone, MessageCircle, Eye, Inbox, Users, RefreshCcw, Loader2, Flame } from "lucide-react"
+import { Phone, MessageCircle, Eye, Inbox, Users, RefreshCcw, Loader2, Flame, ChevronLeft, ChevronRight } from "lucide-react"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { useTelemarketerStore } from "@/lib/stores/telemarketerStore"
 import { createClient } from "@/lib/supabase/client"
@@ -36,6 +36,8 @@ function ageStyle(days: number) {
   return { badge: "bg-slate-100 text-slate-600 border-slate-200", label: `${days}d old` }
 }
 
+const PAGE_SIZE = 20
+
 export function BacklogShell() {
   const { activeTelemarketer } = useTelemarketerStore()
   const [data, setData] = useState<BacklogLead[]>([])
@@ -43,6 +45,7 @@ export function BacklogShell() {
   const [refreshing, setRefreshing] = useState(false)
   const [callingLead, setCallingLead] = useState<BacklogLead | null>(null)
   const [chatLead, setChatLead] = useState<ChatLead | null>(null)
+  const [page, setPage] = useState(0)
 
   async function load(isRefresh = false) {
     if (!activeTelemarketer) { setLoading(false); return }
@@ -77,6 +80,7 @@ export function BacklogShell() {
         }))
 
       setData(backlog)
+      setPage(0)
     } catch (err) {
       console.error("BacklogShell fetch failed:", err)
     } finally {
@@ -90,6 +94,16 @@ export function BacklogShell() {
 
   const oldest = data[0]?.age_days ?? 0
   const coldCount = useMemo(() => data.filter((l) => l.age_days >= 14).length, [data])
+
+  // Client-side pagination over the loaded backlog.
+  const pageCount = Math.max(1, Math.ceil(data.length / PAGE_SIZE))
+  const start = page * PAGE_SIZE
+  const pageData = data.slice(start, start + PAGE_SIZE)
+
+  // Keep the page in range as leads clear off the list (burndown).
+  useEffect(() => {
+    if (page > 0 && start >= data.length) setPage(Math.max(0, pageCount - 1))
+  }, [data.length, page, start, pageCount])
 
   // A logged call means the lead is now contacted — remove it from the pile (burndown).
   function handleCallSaved({ leadId, full_name }: CallSavedPayload & { full_name?: string }) {
@@ -175,7 +189,7 @@ export function BacklogShell() {
         </div>
       ) : (
         <div className="space-y-2">
-          {data.map((lead, i) => {
+          {pageData.map((lead, i) => {
             const age = ageStyle(lead.age_days)
             return (
               <div
@@ -184,7 +198,7 @@ export function BacklogShell() {
               >
                 {/* Position */}
                 <span className="hidden sm:flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-500 tabular-nums">
-                  {i + 1}
+                  {start + i + 1}
                 </span>
 
                 {/* Identity */}
@@ -244,6 +258,38 @@ export function BacklogShell() {
               </div>
             )
           })}
+        </div>
+      )}
+
+      {/* Pagination */}
+      {!loading && data.length > PAGE_SIZE && (
+        <div className="flex items-center justify-between px-1 pt-1">
+          <p className="text-xs text-slate-500">
+            {start + 1}–{Math.min(start + PAGE_SIZE, data.length)} of {data.length}
+          </p>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 w-7 p-0"
+              onClick={() => setPage((p) => Math.max(0, p - 1))}
+              disabled={page === 0}
+            >
+              <ChevronLeft className="h-3.5 w-3.5" />
+            </Button>
+            <span className="text-xs text-slate-600 px-2">
+              Page {page + 1} of {pageCount}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 w-7 p-0"
+              onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
+              disabled={page >= pageCount - 1}
+            >
+              <ChevronRight className="h-3.5 w-3.5" />
+            </Button>
+          </div>
         </div>
       )}
 
