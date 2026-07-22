@@ -5,18 +5,18 @@
 
 -- Fixed UUIDs for predictable references
 -- Telemarketers
--- 11111111-... = Sonnie
+-- 11111111-... = Edith
 -- 22222222-... = Janet
 -- 33333333-... = Suzzie
 
 -- ── Telemarketers ───────────────────────────────────────────
 INSERT INTO telemarketers (id, full_name, email, phone) VALUES
-  ('11111111-1111-1111-1111-111111111111', 'Sonnie',  'sonnie@nebsamdigital.co.ke',  '+254711000001'),
+  ('11111111-1111-1111-1111-111111111111', 'Edith',   'edith@nebsamdigital.co.ke',   '+254711000001'),
   ('22222222-2222-2222-2222-222222222222', 'Janet',   'janet@nebsamdigital.co.ke',   '+254711000002'),
   ('33333333-3333-3333-3333-333333333333', 'Suzzie',  'suzzie@nebsamdigital.co.ke',  '+254711000003');
 
 -- ── Leads (20) ──────────────────────────────────────────────
--- Sonnie's leads (7): leads 01–07
+-- Edith's leads (7): leads 01–07
 -- Janet's leads (7):  leads 08–14
 -- Suzzie's leads (6): leads 15–20
 
@@ -26,7 +26,7 @@ INSERT INTO leads (
   campaign_name, whatsapp_message, created_at
 ) VALUES
 
--- Sonnie's leads
+-- Edith's leads
 ('01000000-0000-0000-0000-000000000001', '+254700111001', '11111111-1111-1111-1111-111111111111',
   'Patrick Kimani', 'Westlands, Nairobi', 'Toyota Prado',
   'Fuel Monitoring Solution', 'whatsapp_bot', 'new', 'red',
@@ -179,7 +179,7 @@ INSERT INTO sales (
   subscription_type, notes
 ) VALUES
 
--- Peter Otieno (lead_05) — Fuel Monitoring, won by Sonnie
+-- Peter Otieno (lead_05) — Fuel Monitoring, won by Edith
 ('a1000000-0000-0000-0000-000000000001',
   '01000000-0000-0000-0000-000000000005', '11111111-1111-1111-1111-111111111111',
   'Fuel Monitoring Solution', 45000.00,
@@ -187,7 +187,7 @@ INSERT INTO sales (
   '2025-01-10', 'KBZ 123A', 'FMS-2025-001',
   'annual', 'Fleet of 10 trucks. Installed on lead vehicle first as pilot.'),
 
--- Samuel Kariuki (lead_07) — Anti-Jammer Tracker, renewal_due soon, sold by Sonnie
+-- Samuel Kariuki (lead_07) — Anti-Jammer Tracker, renewal_due soon, sold by Edith
 ('a1000000-0000-0000-0000-000000000002',
   '01000000-0000-0000-0000-000000000007', '11111111-1111-1111-1111-111111111111',
   'Anti-Jammer Tracker', 28000.00,
@@ -350,7 +350,7 @@ INSERT INTO call_logs (
   'amber', 'quote_sent');
 
 -- ── Round Robin State ───────────────────────────────────────
--- Suzzie is seeded as "last assigned" so the FIRST real webhook lead goes to Sonnie.
+-- Suzzie is seeded as "last assigned" so the FIRST real webhook lead goes to Edith.
 INSERT INTO round_robin_state (last_assigned_telemarketer_id) VALUES
   ('33333333-3333-3333-3333-333333333333');
 

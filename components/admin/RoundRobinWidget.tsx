@@ -81,7 +81,7 @@ export function RoundRobinWidget() {
   useEffect(() => { load() }, [load])
 
   async function handleReset() {
-    if (!confirm("Reset round robin order? The next lead will be assigned to Sonnie.")) return
+    if (!confirm("Reset round robin order? The next lead will be assigned to Edith.")) return
     setResetting(true)
     const supabase = createClient()
     const { error } = await supabase
@@ -92,7 +92,7 @@ export function RoundRobinWidget() {
     if (error) {
       toast.error("Reset failed: " + error.message)
     } else {
-      toast.success("Round robin reset — next lead goes to Sonnie")
+      toast.success("Round robin reset — next lead goes to Edith")
       await load()
     }
     setResetting(false)

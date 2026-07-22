@@ -10,7 +10,7 @@ const sbKey = env.match(/SUPABASE_SERVICE_ROLE_KEY=(.+)/)[1].trim()
 const sb    = createClient(sbUrl, sbKey)
 const BASE  = "https://nebsam-crm.vercel.app"
 
-const SONNIE_PW = "yb85GD_C13UUni3b"
+const EDITH_PW = "yb85GD_C13UUni3b"
 const ADMIN_PW  = "ASac3I7lbJER6qQ8"
 
 const pass = [], fail = [], warn = []
@@ -36,9 +36,9 @@ missing.length === 0 ? ok("1.3", `All 7 tables: ${found.join(", ")}`) : bad("1.3
 // 1.4 Telemarketers
 const { data: tms } = await sb.from("telemarketers").select("full_name,email").order("created_at")
 const names = tms?.map(t => t.full_name) ?? []
-JSON.stringify(names) === JSON.stringify(["Sonnie","Janet","Suzzie"])
+JSON.stringify(names) === JSON.stringify(["Edith","Janet","Suzzie"])
   ? ok("1.4", `Telemarketers: ${names.join(", ")}`)
-  : bad("1.4", `Expected Sonnie,Janet,Suzzie — got: ${names.join(", ")}`)
+  : bad("1.4", `Expected Edith,Janet,Suzzie — got: ${names.join(", ")}`)
 
 // 1.5 Round robin
 const { data: rr } = await sb.from("round_robin_state").select("last_assigned_telemarketer_id").limit(1).single()
@@ -84,10 +84,10 @@ async function loginAs(email, password) {
 }
 
 // ── SECTIONS 2–3: Nav + Dashboard ─────────────────────────────────────────
-const { ctx: c1, page: p1 } = await loginAs("sonnie@nebsamdigital.com", SONNIE_PW)
+const { ctx: c1, page: p1 } = await loginAs("edith@nebsamdigital.com", EDITH_PW)
 await p1.waitForURL("**/dashboard", { timeout: 15000 })
 // Wait for AuthProvider to populate activeTelemarketer — evidenced by the greeting
-await p1.waitForSelector("h1:has-text(\"Sonnie\")", { timeout: 15000 }).catch(() => {})
+await p1.waitForSelector("h1:has-text(\"Edith\")", { timeout: 15000 }).catch(() => {})
 await p1.waitForTimeout(1000)
 
 // 2.1 All pages (check HTTP status directly, not via browser nav)
@@ -115,8 +115,8 @@ adminLinkInSidebar > 0 ? ok("2.2", "Admin link in sidebar") : note("2.2", "Admin
 // 2.3 Header
 const bell = await p1.locator("button[aria-label=\"Follow-up notifications\"]").count()
 bell > 0 ? ok("2.3", "Notification bell visible") : bad("2.3", "Bell missing")
-const userMenuVisible = await p1.locator("text=Sonnie").first().isVisible({ timeout: 5000 }).catch(() => false)
-userMenuVisible ? ok("2.3", "UserMenu shows Sonnie") : note("2.3", "UserMenu 'Sonnie' text not found")
+const userMenuVisible = await p1.locator("text=Edith").first().isVisible({ timeout: 5000 }).catch(() => false)
+userMenuVisible ? ok("2.3", "UserMenu shows Edith") : note("2.3", "UserMenu 'Edith' text not found")
 
 // 2.4 Mobile
 await p1.setViewportSize({ width: 375, height: 667 })
@@ -380,9 +380,9 @@ const { data: assigned } = await sb.from("leads")
   .in("phone_number",["+254788000001","+254788000002","+254788000003"])
   .order("created_at")
 const assignedNames = (assigned||[]).map(l => l.telemarketers?.full_name)
-JSON.stringify(assignedNames) === JSON.stringify(["Sonnie","Janet","Suzzie"])
+JSON.stringify(assignedNames) === JSON.stringify(["Edith","Janet","Suzzie"])
   ? ok("11.2", `Round robin: ${assigned?.map(l=>`${l.phone_number}→${l.telemarketers?.full_name}`).join(", ")}`)
-  : bad("11.2", `Expected Sonnie,Janet,Suzzie — got: ${JSON.stringify(assignedNames)}`)
+  : bad("11.2", `Expected Edith,Janet,Suzzie — got: ${JSON.stringify(assignedNames)}`)
 
 // 11.3 Duplicate phone
 const origAssigned = assigned?.find(l => l.phone_number === "+254788000001")?.assigned_to

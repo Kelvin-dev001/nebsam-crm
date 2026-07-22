@@ -29,15 +29,15 @@ const missingTables = tableChecks.filter(r => !r.ok).map(r => r.t)
 if (missingTables.length === 0) ok("1.1", `All 7 tables accessible: ${requiredTables.join(", ")}`)
 else bad("1.1", `Tables not accessible: ${missingTables.join(", ")}`)
 
-// 1.2 Telemarketer seed order (must be Sonnie, Janet, Suzzie by created_at)
+// 1.2 The three telemarketers exist (order is validated separately by round robin 2.2)
 const { data: tms } = await sb.from("telemarketers").select("id,full_name,email").order("created_at")
 const names = (tms || []).map(t => t.full_name)
-if (JSON.stringify(names.slice(0,3)) === JSON.stringify(["Sonnie","Janet","Suzzie"]))
-  ok("1.2", `Telemarketers in correct order: ${names.join(", ")}`)
+if (["Edith","Janet","Suzzie"].every(n => names.includes(n)))
+  ok("1.2", `All 3 telemarketers present: ${[...names].sort().join(", ")}`)
 else
-  bad("1.2", `Expected Sonnie,Janet,Suzzie — got: ${names.join(", ")}`)
+  bad("1.2", `Expected Edith, Janet, Suzzie — got: ${names.join(", ")}`)
 
-const sonnie = tms?.find(t => t.full_name === "Sonnie")
+const edith = tms?.find(t => t.full_name === "Edith")
 const janet  = tms?.find(t => t.full_name === "Janet")
 const suzzie = tms?.find(t => t.full_name === "Suzzie")
 
@@ -76,11 +76,11 @@ console.log("\n══ SECTION 2: WEBHOOK & ROUND ROBIN ══")
 // Pre-clean test leads
 await sb.from("leads").delete().in("phone_number", ["+254700000001","+254700000002","+254700000003"])
 
-// Reset round robin state to Suzzie so first test lead goes to Sonnie
+// Reset round robin state to Suzzie so first test lead goes to Edith
 const { data: rrRow } = await sb.from("round_robin_state").select("id").limit(1).single()
 if (rrRow?.id) {
   await sb.from("round_robin_state").update({ last_assigned_telemarketer_id: suzzie?.id }).eq("id", rrRow.id)
-  ok("2.0", `Round robin state reset: last_assigned=Suzzie → next will be Sonnie`)
+  ok("2.0", `Round robin state reset: last_assigned=Suzzie → next will be Edith`)
 } else {
   note("2.0", "Could not reset round robin state — rrRow not found")
 }
@@ -103,7 +103,7 @@ const allProcessed = webhookResults.every(r => r.status === 200 && r.body.proces
 if (allProcessed) ok("2.1", `3 webhooks: 200 OK, processed=true, is_new=true ✓`)
 else bad("2.1", `Webhook failures: ${JSON.stringify(webhookResults.map(r=>({s:r.status,b:r.body})))}`)
 
-// 2.2 Verify round robin order: Sonnie → Janet → Suzzie
+// 2.2 Verify round robin order: Edith → Janet → Suzzie
 await new Promise(r => setTimeout(r, 1000))
 const { data: assignedLeads } = await sb
   .from("leads")
@@ -113,10 +113,10 @@ const { data: assignedLeads } = await sb
 
 const assigned = (assignedLeads||[]).map(l => ({ phone: l.phone_number, name: l.telemarketers?.full_name }))
 const assignedNames = assigned.map(a => a.name)
-if (JSON.stringify(assignedNames) === JSON.stringify(["Sonnie","Janet","Suzzie"]))
+if (JSON.stringify(assignedNames) === JSON.stringify(["Edith","Janet","Suzzie"]))
   ok("2.2", `Round robin correct: ${assigned.map(a=>`${a.phone}→${a.name}`).join(", ")}`)
 else
-  bad("2.2", `Expected Sonnie,Janet,Suzzie — got: ${JSON.stringify(assignedNames)}`)
+  bad("2.2", `Expected Edith,Janet,Suzzie — got: ${JSON.stringify(assignedNames)}`)
 
 // 2.3 Duplicate phone → no reassignment
 const origAssigned = assignedLeads?.find(l => l.phone_number === "+254700000001")?.assigned_to
@@ -157,7 +157,7 @@ const { data: newLead, error: insertErr } = await sb.from("leads").insert({
   funnel_stage: "new",
   rag_status: "amber",
   campaign_name: "QA Test",
-  assigned_to: sonnie?.id,
+  assigned_to: edith?.id,
 }).select().single()
 
 if (!insertErr && newLead?.funnel_stage === "new" && newLead?.rag_status === "amber")
@@ -218,7 +218,7 @@ const tomorrowStr = tomorrow.toISOString().split("T")[0]
 // 4.1 Insert call log with all fields
 const { data: cl1, error: cl1Err } = await sb.from("call_logs").insert({
   lead_id: testLeadId,
-  telemarketer_id: sonnie?.id,
+  telemarketer_id: edith?.id,
   call_outcome: "answered",
   duration_seconds: 180,
   call_notes: "Client very interested, wants quote",
@@ -235,13 +235,13 @@ note("4.2", "Lead RAG/stage are updated by the CallLogModal form on save — no 
 // 4.3 Follow-up schedule
 const { data: fu1, error: fuErr } = await sb.from("followup_schedule").insert({
   lead_id: testLeadId,
-  telemarketer_id: sonnie?.id,
+  telemarketer_id: edith?.id,
   followup_type: "pre_sale",
   scheduled_date: tomorrowStr,
   notes: "Follow up on quote",
   status: "pending",
 }).select().single()
-if (!fuErr && fu1?.scheduled_date === tomorrowStr)
+if (!fuErr && fu1?.scheduled_date?.slice(0,10) === tomorrowStr)
   ok("4.3", `Follow-up scheduled for ${tomorrowStr}, status=pending ✓`)
 else
   bad("4.3", `Follow-up failed: ${fuErr?.message}`)
@@ -249,7 +249,7 @@ else
 // 4.4 Second call + ordering
 const { data: cl2, error: cl2Err } = await sb.from("call_logs").insert({
   lead_id: testLeadId,
-  telemarketer_id: sonnie?.id,
+  telemarketer_id: edith?.id,
   call_outcome: "answered",
   duration_seconds: 240,
   call_notes: "Sending contract",
@@ -270,7 +270,7 @@ const today = new Date().toISOString().split("T")[0]
 // 5.1 Insert sale
 const { data: sale1, error: saleErr } = await sb.from("sales").insert({
   lead_id: testLeadId,
-  telemarketer_id: sonnie?.id,
+  telemarketer_id: edith?.id,
   product: "Fuel Monitoring Solution",
   sale_amount: 35000,
   currency: "KES",
@@ -375,20 +375,20 @@ if (pdfOk && fetchOk) {
     note("7.2", "Some PDF exports missing — check lib/reports/")
 } else bad("7.2", `Missing: generatePDF=${pdfOk}, fetchReportData=${fetchOk}`)
 
-// 7.3 Report query for Sonnie
-if (sonnie) {
+// 7.3 Report query for Edith
+if (edith) {
   const todayStart = new Date(); todayStart.setHours(0,0,0,0)
   const todayEnd   = new Date(); todayEnd.setHours(23,59,59,999)
-  const { data: sLeads } = await sb.from("leads").select("id,rag_status").eq("assigned_to",sonnie.id)
-  const { data: sCalls } = await sb.from("call_logs").select("id").eq("telemarketer_id",sonnie.id)
+  const { data: sLeads } = await sb.from("leads").select("id,rag_status").eq("assigned_to",edith.id)
+  const { data: sCalls } = await sb.from("call_logs").select("id").eq("telemarketer_id",edith.id)
     .gte("called_at", todayStart.toISOString()).lte("called_at", todayEnd.toISOString())
-  const { data: sWins  } = await sb.from("sales").select("id").eq("telemarketer_id",sonnie.id).eq("sale_date",today)
-  const { data: sAllWins } = await sb.from("sales").select("id").eq("telemarketer_id",sonnie.id)
+  const { data: sWins  } = await sb.from("sales").select("id").eq("telemarketer_id",edith.id).eq("sale_date",today)
+  const { data: sAllWins } = await sb.from("sales").select("id").eq("telemarketer_id",edith.id)
   const rag = { red:0, amber:0, green:0 }
   ;(sLeads||[]).forEach(l => rag[l.rag_status]=(rag[l.rag_status]||0)+1)
   const total = sLeads?.length || 0
   const winRate = total > 0 ? Math.round(((sAllWins?.length||0)/total)*1000)/10 : 0
-  ok("7.3", `Sonnie: ${total} leads, ${sCalls?.length} calls today, RAG red=${rag.red}/amber=${rag.amber}/green=${rag.green}, winsToday=${sWins?.length}, winRate=${winRate}%`)
+  ok("7.3", `Edith: ${total} leads, ${sCalls?.length} calls today, RAG red=${rag.red}/amber=${rag.amber}/green=${rag.green}, winsToday=${sWins?.length}, winRate=${winRate}%`)
 }
 
 // 7.4 Dashboard download button
@@ -416,16 +416,16 @@ const lastTM    = orderedTMs.find(t => t.id === rr2?.last_assigned_telemarketer_
 ok("8.1", `RR state: last=${lastTM?.full_name ?? "none"}, next=${nextTM?.full_name} ✓`)
 
 // 8.2 Lead reassignment test
-const { data: sonniesLeads } = await sb.from("leads").select("id").eq("assigned_to",sonnie?.id).limit(1)
-const reassignId = sonniesLeads?.[0]?.id
+const { data: edithsLeads } = await sb.from("leads").select("id").eq("assigned_to",edith?.id).limit(1)
+const reassignId = edithsLeads?.[0]?.id
 if (reassignId && janet) {
   await sb.from("leads").update({ assigned_to: janet.id }).eq("id",reassignId)
   const { data: after } = await sb.from("leads").select("assigned_to").eq("id",reassignId).single()
   if (after?.assigned_to === janet.id) {
-    ok("8.2", `Lead reassigned Sonnie→Janet ✓`)
-    await sb.from("leads").update({ assigned_to: sonnie?.id }).eq("id",reassignId) // restore
+    ok("8.2", `Lead reassigned Edith→Janet ✓`)
+    await sb.from("leads").update({ assigned_to: edith?.id }).eq("id",reassignId) // restore
   } else bad("8.2", "Reassignment did not persist")
-} else note("8.2", "No Sonnie lead available to test reassignment")
+} else note("8.2", "No Edith lead available to test reassignment")
 
 // 8.3 CSV Import column mapping
 const csvContent = readFileSync("components/admin/CSVImport.tsx","utf8")

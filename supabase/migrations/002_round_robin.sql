@@ -5,7 +5,7 @@
 
 -- ── Round Robin State ────────────────────────────────────────
 -- Always exactly ONE row. Tracks who was last assigned a lead
--- so the cycle (Sonnie → Janet → Suzzie → ...) survives restarts.
+-- so the cycle (Edith → Janet → Suzzie → ...) survives restarts.
 
 CREATE TABLE round_robin_state (
   id                            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -70,7 +70,7 @@ BEGIN
   ELSE
     -- New lead: round robin assignment
 
-    -- Get ordered active telemarketer IDs (created_at = seeded order: Sonnie, Janet, Suzzie)
+    -- Get ordered active telemarketer IDs (created_at = seeded order: Edith, Janet, Suzzie)
     SELECT ARRAY_AGG(id ORDER BY created_at)
     INTO v_telemarketers
     FROM telemarketers
@@ -82,7 +82,7 @@ BEGIN
     FROM round_robin_state
     LIMIT 1;
 
-    -- Find position of last assigned (0 if null/not found → next = index 1 = Sonnie)
+    -- Find position of last assigned (0 if null/not found → next = index 1 = Edith)
     SELECT COALESCE(ARRAY_POSITION(v_telemarketers, v_last_assigned), 0)
     INTO v_last_idx;
 

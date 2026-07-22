@@ -21,7 +21,7 @@ function genPassword() {
 }
 
 const USERS = [
-  { email: "sonnie@nebsamdigital.com", role: "telemarketer", tmEmail: "sonnie@nebsamdigital.co.ke" },
+  { email: "edith@nebsamdigital.com", role: "telemarketer", tmEmail: "edith@nebsamdigital.co.ke" },
   { email: "janet@nebsamdigital.com",  role: "telemarketer", tmEmail: "janet@nebsamdigital.co.ke"  },
   { email: "suzzie@nebsamdigital.com", role: "telemarketer", tmEmail: "suzzie@nebsamdigital.co.ke" },
   { email: "admin@nebsamdigital.com",  role: "admin",        tmEmail: null                         },

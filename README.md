@@ -1,7 +1,7 @@
 # Nebsam CRM
 
 A full-stack CRM for **Nebsam Digital Solutions**, a Kenyan digital marketing company.
-Three telemarketers (Sonnie, Janet, Suzzie) manage WhatsApp leads from first inquiry through annual renewal.
+Three telemarketers (Edith, Janet, Suzzie) manage WhatsApp leads from first inquiry through annual renewal.
 
 ---
 
@@ -64,7 +64,7 @@ node scripts/migrate.mjs --seed
 This creates all 6 tables and loads 3 telemarketers + 20 sample leads.
 
 **Tables created:**
-- `telemarketers` — Sonnie, Janet, Suzzie
+- `telemarketers` — Edith, Janet, Suzzie
 - `leads` — WhatsApp leads with funnel stage and RAG status
 - `call_logs` — Call history per lead
 - `sales` — Won deals with renewal dates

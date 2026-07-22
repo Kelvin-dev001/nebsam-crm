@@ -3,7 +3,7 @@
 ## Project Overview
 A full-stack CRM system for **Nebsam Digital Solutions**, a Kenyan digital marketing company
 running Meta and TikTok ad campaigns that direct leads into a WhatsApp BSP chatbot.
-Three telemarketers (Sonnie, Janet, Suzzie) manage leads from first inquiry through to
+Three telemarketers (Edith, Janet, Suzzie) manage leads from first inquiry through to
 annual renewal follow-ups.
 
 ## Tech Stack
@@ -20,7 +20,7 @@ annual renewal follow-ups.
 ## Business Rules (Never Violate These)
 - All currency in **KES (Kenyan Shillings)** — format as `KES 12,500`
 - All phone numbers in **international format** (+254XXXXXXXXX)
-- Telemarketers: **Sonnie, Janet, Suzzie**
+- Telemarketers: **Edith, Janet, Suzzie**
 - Lead source: WhatsApp BSP webhook (auto-push into CRM)
 - Lead access: Each telemarketer sees **only their assigned leads**
 - `renewal_due_date` = `installation_date + 365 days` (auto-calculated)
@@ -60,7 +60,7 @@ Bluetooth Tracker, Anti-Jammer Tracker, Other (specify)
 - [ ] Write and run `supabase/migrations/001_initial_schema.sql`
 - [ ] Create all 6 tables: telemarketers, leads, call_logs, sales, followup_schedule, webhook_events
 - [ ] Add RLS policies (stubbed for future auth)
-- [ ] Write and run `supabase/seed.sql` with Sonnie, Janet, Suzzie + 20 leads
+- [ ] Write and run `supabase/seed.sql` with Edith, Janet, Suzzie + 20 leads
 - [ ] Generate `lib/supabase/types.ts` from schema
 - [ ] Create `types/crm.ts` with all enums
 

@@ -225,7 +225,7 @@ export function TelemarketerManager() {
               <Label htmlFor="tm-name">Full Name *</Label>
               <Input
                 id="tm-name"
-                placeholder="e.g. Sonnie Wanjiku"
+                placeholder="e.g. Edith Wanjiku"
                 value={form.full_name}
                 onChange={(e) => setForm((f) => ({ ...f, full_name: e.target.value }))}
               />
@@ -235,7 +235,7 @@ export function TelemarketerManager() {
               <Input
                 id="tm-email"
                 type="email"
-                placeholder="e.g. sonnie@nebsam.co.ke"
+                placeholder="e.g. edith@nebsam.co.ke"
                 value={form.email}
                 onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
               />

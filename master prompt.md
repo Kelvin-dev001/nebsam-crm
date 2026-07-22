@@ -373,7 +373,7 @@ nebsam-crm/
 ## SEED DATA
 
 Generate a seed script `supabase/seed.sql` that inserts:
-- 3 telemarketers: **Sonnie**, **Janet**, and **Suzzie**
+- 3 telemarketers: **Edith**, **Janet**, and **Suzzie**
 - 20 sample leads spread across all funnel stages, RAG statuses, and products
 - 15 sample call logs across those leads
 - 4 sales records with renewal dates
