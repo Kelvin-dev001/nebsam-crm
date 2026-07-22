@@ -3,9 +3,21 @@ import { Input as InputPrimitive } from "@base-ui/react/input"
 
 import { cn } from "@/lib/utils"
 
-function Input({ className, type, ...props }: React.ComponentProps<"input">) {
+// Must forwardRef: react-hook-form's register() attaches the field via a ref
+// callback. This wrapper is a plain function component, and on React 18 `ref`
+// is handled specially and never appears in props — so {...props} silently
+// dropped it before it ever reached base-ui's InputPrimitive. The field was
+// never added to RHF's _fields map and its value was never captured, which is
+// why KYC fields, follow-up date, and duration all persisted as null/empty
+// (0 follow-up_schedule rows, 0 durations across 264 calls). forwardRef wires
+// the ref through so RHF can register the underlying <input>.
+const Input = React.forwardRef<
+  HTMLInputElement,
+  React.ComponentProps<"input">
+>(({ className, type, ...props }, ref) => {
   return (
     <InputPrimitive
+      ref={ref}
       type={type}
       data-slot="input"
       className={cn(
@@ -15,6 +27,7 @@ function Input({ className, type, ...props }: React.ComponentProps<"input">) {
       {...props}
     />
   )
-}
+})
+Input.displayName = "Input"
 
 export { Input }
