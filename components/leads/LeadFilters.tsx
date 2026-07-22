@@ -23,14 +23,16 @@ export function LeadFilters({ table, globalFilter, onGlobalFilterChange }: Props
   const ragFilter = (table.getColumn("rag_status")?.getFilterValue() as string) ?? ""
   const stageFilter = (table.getColumn("funnel_stage")?.getFilterValue() as string) ?? ""
   const productFilter = (table.getColumn("product_interested")?.getFilterValue() as string) ?? ""
+  const contactedFilter = (table.getColumn("contacted")?.getFilterValue() as string) ?? ""
 
-  const hasActiveFilters = !!globalFilter || !!ragFilter || !!stageFilter || !!productFilter
+  const hasActiveFilters = !!globalFilter || !!ragFilter || !!stageFilter || !!productFilter || !!contactedFilter
 
   function clearAll() {
     onGlobalFilterChange("")
     table.getColumn("rag_status")?.setFilterValue(undefined)
     table.getColumn("funnel_stage")?.setFilterValue(undefined)
     table.getColumn("product_interested")?.setFilterValue(undefined)
+    table.getColumn("contacted")?.setFilterValue(undefined)
     table.resetPagination()
   }
 
@@ -81,6 +83,17 @@ export function LeadFilters({ table, globalFilter, onGlobalFilterChange }: Props
         {PRODUCTS.map((p) => (
           <option key={p} value={p}>{p}</option>
         ))}
+      </select>
+
+      {/* Contacted filter */}
+      <select
+        value={contactedFilter}
+        onChange={(e) => { table.getColumn("contacted")?.setFilterValue(e.target.value || undefined); table.resetPagination() }}
+        className="h-9 rounded-md border border-input bg-background px-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-ring"
+      >
+        <option value="">All Contact</option>
+        <option value="contacted">Contacted</option>
+        <option value="not">Not contacted</option>
       </select>
 
       {/* Clear */}

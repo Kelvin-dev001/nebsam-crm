@@ -42,6 +42,9 @@ export interface CallSavedPayload {
   leadId: string
   ragStatus: RAGStatus
   funnelStage: FunnelStage
+  callOutcome: string
+  callNote: string | null
+  calledAt: string
 }
 
 // ── Schema ────────────────────────────────────────────────────────────────────
@@ -158,7 +161,14 @@ export function CallLogModal({ lead, onClose, onSaved }: Props) {
     const newRagStatus = values.rag_status
 
     // Optimistic: update the parent immediately and close
-    onSaved({ leadId: lead.id, ragStatus: newRagStatus, funnelStage: newFunnelStage })
+    onSaved({
+      leadId: lead.id,
+      ragStatus: newRagStatus,
+      funnelStage: newFunnelStage,
+      callOutcome: values.call_outcome,
+      callNote: values.call_notes || null,
+      calledAt: new Date().toISOString(),
+    })
     onClose()
 
     // Background writes

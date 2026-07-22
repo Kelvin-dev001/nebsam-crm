@@ -18,7 +18,11 @@ export type RAGStatus = "green" | "amber" | "red"
 export type Product =
   | "Fuel Monitoring Solution"
   | "Hybrid Car Alarm"
+  | "Hybrid Pro Max Alarm"
+  | "Hybrid Pro Max Plus Alarm"
   | "Hybrid Car Tracker"
+  | "Hybrid Pro Tracker"
+  | "Hybrid Pro Max Tracker"
   | "Vehicle Video Telematics"
   | "Hybrid Dash Cam"
   | "Recovery Tracker"
@@ -67,7 +71,11 @@ export const FUNNEL_STAGES: FunnelStage[] = [
 export const PRODUCTS: Product[] = [
   "Fuel Monitoring Solution",
   "Hybrid Car Alarm",
+  "Hybrid Pro Max Alarm",
+  "Hybrid Pro Max Plus Alarm",
   "Hybrid Car Tracker",
+  "Hybrid Pro Tracker",
+  "Hybrid Pro Max Tracker",
   "Vehicle Video Telematics",
   "Hybrid Dash Cam",
   "Recovery Tracker",

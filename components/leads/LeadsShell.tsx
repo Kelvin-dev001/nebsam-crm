@@ -13,8 +13,9 @@ import {
   type PaginationState,
 } from "@tanstack/react-table"
 import Link from "next/link"
-import { Phone, Eye, Wifi, MessageCircle } from "lucide-react"
+import { Phone, Eye, Wifi, MessageCircle, StickyNote, CheckCircle2 } from "lucide-react"
 import { Button, buttonVariants } from "@/components/ui/button"
+import { LeadNotesDialog } from "./LeadNotesDialog"
 import { useTelemarketerStore } from "@/lib/stores/telemarketerStore"
 import { createClient } from "@/lib/supabase/client"
 import type { LeadRow } from "@/lib/supabase/types"
@@ -31,6 +32,12 @@ import { isPast } from "date-fns"
 import { cn } from "@/lib/utils"
 import { Users } from "lucide-react"
 import { toast } from "sonner"
+
+export interface CallNoteEntry {
+  called_at: string
+  call_outcome: string
+  call_notes: string | null
+}
 
 export interface ProcessedLead {
   id: string
@@ -49,6 +56,8 @@ export interface ProcessedLead {
   updated_at: string
   last_called: string | null
   next_followup: string | null
+  call_count: number
+  call_history: CallNoteEntry[]
 }
 
 export function LeadsShell() {
@@ -57,6 +66,7 @@ export function LeadsShell() {
   const [loading, setLoading] = useState(true)
   const [callingLead, setCallingLead] = useState<ProcessedLead | null>(null)
   const [chatLead,    setChatLead]    = useState<ChatLead | null>(null)
+  const [notesLead,   setNotesLead]   = useState<ProcessedLead | null>(null)
   const [globalFilter, setGlobalFilter] = useState("")
   const [sorting, setSorting] = useState<SortingState>([{ id: "updated_at", desc: true }])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
@@ -72,14 +82,14 @@ export function LeadsShell() {
       try {
         const { data: raw, error } = await supabase
           .from("leads")
-          .select("*, call_logs(called_at, call_outcome), followup_schedule(scheduled_date, status)")
+          .select("*, call_logs(called_at, call_outcome, call_notes), followup_schedule(scheduled_date, status)")
           .eq("assigned_to", activeTelemarketer.id)
           .order("updated_at", { ascending: false })
         if (error) console.error("LeadsShell fetch error:", error)
         if (!raw) return
 
         type RawLead = LeadRow & {
-          call_logs: Array<{ called_at: string }>
+          call_logs: Array<{ called_at: string; call_outcome: string; call_notes: string | null }>
           followup_schedule: Array<{ scheduled_date: string; status: string }>
         }
         const processed: ProcessedLead[] = (raw as unknown as RawLead[]).map((lead) => {
@@ -107,6 +117,12 @@ export function LeadsShell() {
             updated_at: lead.updated_at,
             last_called: sortedCalls[0]?.called_at ?? null,
             next_followup: pendingFollowups[0]?.scheduled_date ?? null,
+            call_count: sortedCalls.length,
+            call_history: sortedCalls.map((c) => ({
+              called_at: c.called_at,
+              call_outcome: c.call_outcome,
+              call_notes: c.call_notes,
+            })),
           }
         })
 
@@ -153,6 +169,8 @@ export function LeadsShell() {
             updated_at: raw.updated_at,
             last_called: null,
             next_followup: null,
+            call_count: 0,
+            call_history: [],
           }
           setData((prev) => [newLead, ...prev])
           toast.info(`New lead: ${newLead.full_name ?? newLead.phone_number}`, {
@@ -272,6 +290,31 @@ export function LeadsShell() {
         },
       },
       {
+        id: "contacted",
+        accessorFn: (row) => (row.call_count > 0 ? "contacted" : "not"),
+        header: "Contact",
+        enableSorting: false,
+        filterFn: "equals",
+        cell: ({ row }) => {
+          const lead = row.original
+          if (lead.call_count === 0) {
+            return <span className="text-xs text-slate-400 whitespace-nowrap">Not contacted</span>
+          }
+          return (
+            <button
+              type="button"
+              onClick={() => setNotesLead(lead)}
+              title="View call notes"
+              className="inline-flex items-center gap-1.5 rounded-full border border-green-200 bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700 hover:bg-green-100 transition-colors whitespace-nowrap"
+            >
+              <CheckCircle2 className="h-3 w-3" />
+              {lead.call_count} call{lead.call_count > 1 ? "s" : ""}
+              <StickyNote className="h-3 w-3 opacity-70" />
+            </button>
+          )
+        },
+      },
+      {
         id: "actions",
         header: "",
         enableSorting: false,
@@ -316,6 +359,7 @@ export function LeadsShell() {
     onColumnFiltersChange: setColumnFilters,
     onGlobalFilterChange: setGlobalFilter,
     onPaginationChange: setPagination,
+    autoResetPageIndex: false,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
@@ -329,11 +373,21 @@ export function LeadsShell() {
     },
   })
 
-  function handleCallSaved({ leadId, ragStatus, funnelStage }: CallSavedPayload) {
+  function handleCallSaved({ leadId, ragStatus, funnelStage, callOutcome, callNote, calledAt }: CallSavedPayload) {
     setData((prev) =>
       prev.map((lead) =>
         lead.id === leadId
-          ? { ...lead, rag_status: ragStatus, funnel_stage: funnelStage, last_called: new Date().toISOString() }
+          ? {
+              ...lead,
+              rag_status: ragStatus,
+              funnel_stage: funnelStage,
+              last_called: calledAt,
+              call_count: lead.call_count + 1,
+              call_history: [
+                { called_at: calledAt, call_outcome: callOutcome, call_notes: callNote },
+                ...lead.call_history,
+              ],
+            }
           : lead
       )
     )
@@ -376,6 +430,11 @@ export function LeadsShell() {
       <ChatModal
         lead={chatLead}
         onClose={() => setChatLead(null)}
+      />
+
+      <LeadNotesDialog
+        lead={notesLead}
+        onClose={() => setNotesLead(null)}
       />
     </div>
   )
