@@ -4,6 +4,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { LayoutDashboard, Users, RefreshCcw, Settings, Inbox } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { SignOutButton } from "./SignOutButton"
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -43,8 +44,8 @@ export function Sidebar() {
         ))}
       </nav>
 
-      {/* Admin link at bottom */}
-      <div className="px-3 py-4 border-t border-white/10">
+      {/* Admin link + Sign Out at bottom */}
+      <div className="px-3 py-4 border-t border-white/10 space-y-1">
         <Link
           href={adminItem.href}
           className={cn(
@@ -57,6 +58,7 @@ export function Sidebar() {
           <adminItem.icon className="h-4 w-4 shrink-0" />
           {adminItem.label}
         </Link>
+        <SignOutButton />
       </div>
     </aside>
   )
