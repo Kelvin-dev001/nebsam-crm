@@ -1,6 +1,6 @@
 "use client"
 
-import { Users, LayoutList, BarChart2, UserCog, Upload, FileBarChart } from "lucide-react"
+import { Users, LayoutList, BarChart2, UserCog, Upload, FileBarChart, Activity } from "lucide-react"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { AllLeadsOverview } from "./AllLeadsOverview"
 import { LeadAssignment } from "./LeadAssignment"
@@ -9,6 +9,7 @@ import { TelemarketerManager } from "./TelemarketerManager"
 import { CSVImport } from "./CSVImport"
 import { RoundRobinWidget } from "./RoundRobinWidget"
 import { ReportsTab } from "./ReportsTab"
+import { CapacityWidget } from "./CapacityWidget"
 
 export function AdminShell() {
   return (
@@ -29,6 +30,10 @@ export function AdminShell() {
           <TabsTrigger value="overview" className="gap-1.5 px-4 pb-3 text-sm">
             <LayoutList className="h-4 w-4" />
             All Leads
+          </TabsTrigger>
+          <TabsTrigger value="capacity" className="gap-1.5 px-4 pb-3 text-sm">
+            <Activity className="h-4 w-4" />
+            Capacity
           </TabsTrigger>
           <TabsTrigger value="assignment" className="gap-1.5 px-4 pb-3 text-sm">
             <Users className="h-4 w-4" />
@@ -54,6 +59,9 @@ export function AdminShell() {
 
         <TabsContent value="overview" className="mt-4">
           <AllLeadsOverview />
+        </TabsContent>
+        <TabsContent value="capacity" className="mt-4">
+          <CapacityWidget />
         </TabsContent>
         <TabsContent value="assignment" className="mt-4">
           <LeadAssignment />
