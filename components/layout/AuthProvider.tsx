@@ -3,8 +3,12 @@
 import { useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
+import { performSignOut } from "@/lib/auth/signOut"
 import { useTelemarketerStore } from "@/lib/stores/telemarketerStore"
 import type { Telemarketer } from "@/types/crm"
+
+// Auto-logout after this much inactivity (no pointer/keyboard/scroll activity).
+const IDLE_LOGOUT_MS = 30 * 60 * 1000 // 30 minutes
 
 async function fetchLinkedTelemarketer(userId: string): Promise<Telemarketer | null> {
   const supabase = createClient()
@@ -35,17 +39,20 @@ export function AuthProvider() {
     }
 
     async function syncSession() {
-      const { data: { session } } = await supabase.auth.getSession()
+      // getUser() validates the token with the Auth server (and refreshes it if
+      // possible). Unlike getSession(), it returns null for a stale/expired
+      // session instead of handing back a dead token that makes queries hang.
+      const { data: { user } } = await supabase.auth.getUser()
 
-      if (!session) {
+      if (!user) {
         setActiveTelemarketer(null)
         return
       }
 
-      const role = session.user.user_metadata?.role as string | undefined
+      const role = user.user_metadata?.role as string | undefined
 
       if (role === "telemarketer") {
-        const tm = await fetchLinkedTelemarketer(session.user.id)
+        const tm = await fetchLinkedTelemarketer(user.id)
         setIfChanged(tm)
       } else {
         // Admin — not linked to a specific telemarketer
@@ -81,6 +88,37 @@ export function AuthProvider() {
   // router and activeTelemarketer intentionally excluded:
   // - router: including it re-runs on every navigation (stable in Next.js App Router)
   // - activeTelemarketer: setIfChanged reads it via getState() to avoid stale closure
+
+  // ── Inactivity auto-logout ──────────────────────────────────────────────
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined
+
+    function schedule() {
+      if (timer) clearTimeout(timer)
+      timer = setTimeout(() => {
+        // Only sign out if there actually is a session to end.
+        const supabase = createClient()
+        supabase.auth.getSession().then(({ data: { session } }) => {
+          if (session) performSignOut()
+        })
+      }, IDLE_LOGOUT_MS)
+    }
+
+    const events: (keyof WindowEventMap)[] = [
+      "mousemove",
+      "keydown",
+      "click",
+      "scroll",
+      "touchstart",
+    ]
+    events.forEach((e) => window.addEventListener(e, schedule, { passive: true }))
+    schedule()
+
+    return () => {
+      if (timer) clearTimeout(timer)
+      events.forEach((e) => window.removeEventListener(e, schedule))
+    }
+  }, [])
 
   return null
 }

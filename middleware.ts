@@ -23,8 +23,11 @@ export async function middleware(request: NextRequest) {
     },
   )
 
-  // Refresh session — required by @supabase/ssr
-  const { data: { session } } = await supabase.auth.getSession()
+  // Validate the token with the Auth server. getUser() actually verifies the
+  // JWT (and refreshes it if possible); getSession() only reads the cookie and
+  // will happily hand back an expired/stale session — which is what let a dead
+  // session walk straight into the dashboard instead of being sent to /login.
+  const { data: { user } } = await supabase.auth.getUser()
 
   const path = request.nextUrl.pathname
 
@@ -32,7 +35,7 @@ export async function middleware(request: NextRequest) {
   if (path.startsWith("/api")) return response
 
   // ── Unauthenticated ───────────────────────────────────────────────────────
-  if (!session) {
+  if (!user) {
     if (path === "/login") return response
     const loginUrl = new URL("/login", request.url)
     loginUrl.searchParams.set("next", path)
@@ -40,7 +43,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // ── Authenticated ─────────────────────────────────────────────────────────
-  const role = (session.user.user_metadata?.role as string | undefined) ?? "telemarketer"
+  const role = (user.user_metadata?.role as string | undefined) ?? "telemarketer"
 
   // Redirect away from login page
   if (path === "/login") {

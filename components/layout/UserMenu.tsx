@@ -1,7 +1,6 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
 import { ChevronDown, LogOut, Loader2 } from "lucide-react"
 import {
   DropdownMenu,
@@ -13,6 +12,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { createClient } from "@/lib/supabase/client"
+import { performSignOut } from "@/lib/auth/signOut"
 import { useTelemarketerStore } from "@/lib/stores/telemarketerStore"
 
 interface AuthUser {
@@ -22,7 +22,6 @@ interface AuthUser {
 }
 
 export function UserMenu() {
-  const router = useRouter()
   const { activeTelemarketer } = useTelemarketerStore()
   const [user,        setUser]        = useState<AuthUser | null>(null)
   const [signingOut,  setSigningOut]  = useState(false)
@@ -41,10 +40,7 @@ export function UserMenu() {
 
   async function handleSignOut() {
     setSigningOut(true)
-    const supabase = createClient()
-    await supabase.auth.signOut()
-    router.push("/login")
-    router.refresh()
+    await performSignOut()
   }
 
   if (!user) {
