@@ -63,7 +63,17 @@ export function AuthProvider() {
     syncSession()
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+      // IMPORTANT: this callback runs *inside* the GoTrue auth lock (the Web
+      // Locks entry the browser client holds during token refresh and tab
+      // visibility/focus session recovery). It MUST NOT be async and MUST NOT
+      // await any supabase.* call: a query issued here needs to re-acquire the
+      // same non-reentrant lock to attach its auth header, which deadlocks the
+      // lock forever — after which every request in the app hangs. That is the
+      // "works on login, hangs a few minutes later" bug (a few minutes = the
+      // first time the tab is backgrounded and refocused, which re-fires
+      // SIGNED_IN/TOKEN_REFRESHED under the lock). Defer all supabase work out
+      // of the callback with setTimeout(…, 0) so it runs after the lock frees.
+      (event, session) => {
         if (event === "SIGNED_OUT" || !session) {
           setActiveTelemarketer(null)
           router.push("/login")
@@ -73,12 +83,14 @@ export function AuthProvider() {
 
         if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
           const role = session.user.user_metadata?.role as string | undefined
-          if (role === "telemarketer") {
-            const tm = await fetchLinkedTelemarketer(session.user.id)
-            setIfChanged(tm)
-          } else {
-            setIfChanged(null)
-          }
+          setTimeout(async () => {
+            if (role === "telemarketer") {
+              const tm = await fetchLinkedTelemarketer(session.user.id)
+              setIfChanged(tm)
+            } else {
+              setIfChanged(null)
+            }
+          }, 0)
         }
       },
     )
