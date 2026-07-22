@@ -1,15 +1,12 @@
 // RAG Auto-Flag Cron — runs daily at 8:00 AM EAT (05:00 UTC)
 //
-// Schedule via Supabase Dashboard → Database → Cron Jobs → New cron job:
-//   Name:     rag-auto-flag
-//   Schedule: 0 5 * * *
-//   Command:  SELECT net.http_post(
-//               'https://slnphqsrrjpqcthezgun.supabase.co/functions/v1/rag-cron',
-//               '{}',
-//               'application/json'
-//             );
-//
-// Deploy: supabase functions deploy rag-cron
+// ⚠️  SUPERSEDED (2026-07-22): the RAG auto-flag now runs natively in
+// Postgres via public.rag_auto_flag(), scheduled by pg_cron. See
+// supabase/migrations/007_rag_cron_sql.sql and 008_rag_age_gate.sql.
+// Running the logic in SQL removed three failure points that broke this
+// edge-function approach (it was never deployed, and the pg_cron
+// net.http_post call was malformed). This file is kept only as a
+// reference for the flagging logic and is no longer invoked.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
