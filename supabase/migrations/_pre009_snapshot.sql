@@ -17,6 +17,14 @@
 -- twenty live customer phone numbers to git history.
 -- ============================================================================
 
+-- 0. Render every timestamp in UTC. ::text formats according to the session
+--    TimeZone, so the same instant prints as +00 on Supabase and +03 on a local
+--    cluster running in EAT. Without this, comparing a staging capture against a
+--    production one shows differences that are purely cosmetic -- which is exactly
+--    the kind of false alarm section 10 must not produce. Affects this connection
+--    only.
+SET TimeZone = 'UTC';
+
 -- 1. Row counts and time bounds for every table 009 backfills.
 SELECT 'leads'             AS t, count(*) AS rows, max(updated_at)::text  AS hi, min(created_at)::text AS lo FROM leads
 UNION ALL

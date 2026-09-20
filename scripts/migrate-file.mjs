@@ -148,7 +148,8 @@ if (url.port === "6543") {
 // actually pass.
 const dbUser = decodeURIComponent(url.username)
 const projectRef = dbUser.includes(".") ? dbUser.split(".").slice(1).join(".") : null
-const targetId = dbUser + "@" + url.hostname + ":" + (url.port || "5432")
+const dbName = url.pathname.slice(1) || "postgres"
+const targetId = dbUser + "@" + url.hostname + ":" + (url.port || "5432") + "/" + dbName
 
 // ---- Safety gate: a real apply must name its target ----------------------
 
@@ -209,7 +210,7 @@ console.log("  | sha256   : " + sha)
 console.log("  | env var  : " + resolvedEnvName)
 console.log("  | host     : " + url.hostname)
 console.log("  | port     : " + (url.port || "5432"))
-console.log("  | database : " + (url.pathname.slice(1) || "postgres"))
+console.log("  | database : " + dbName)
 console.log("  | user     : " + dbUser)
 if (projectRef) console.log("  | project  : " + projectRef)
 console.log("  | mode     : " + mode)
@@ -256,9 +257,13 @@ function printResults(out, label) {
 
 // ---- Run -----------------------------------------------------------------
 
+// Supabase requires SSL; a local staging cluster does not offer it at all and
+// rejects the negotiation outright ("The server does not support SSL connections").
+const isLocal = ["localhost", "127.0.0.1", "::1"].includes(url.hostname)
+
 const client = new pg.Client({
   connectionString,
-  ssl: { rejectUnauthorized: false },
+  ssl: isLocal ? false : { rejectUnauthorized: false },
   connectionTimeoutMillis: 20000,
 })
 

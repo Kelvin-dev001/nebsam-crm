@@ -73,6 +73,25 @@ plus `/api/webhook/whatsapp`, `/api/whatsapp/{send,installed-message,test}`.
 - Migrations 002–008 were applied by hand in the Supabase SQL editor. 009 onward go through
   the runner.
 
+**Backups — see `supabase/BACKUP-RESTORE.md` before every migration.** A plain `pg_dump` of the
+whole database *does not work here*: the session pooler drops long `COPY` streams, so the backup
+is taken per-table with keepalives plus a chunked export of `webhook_events`. `pg_restore --list`
+does **not** verify a backup — the first failed dump still listed a TOC entry for a table whose
+data had aborted. Only a real restore verifies one.
+
+**Client binaries and local staging.** `pg_dump` / `psql` / `pg_restore` 17.6 live in
+`C:\Users\user\Tools\pgsql\bin` (EDB zip, no admin install). A local PostgreSQL 17.6 cluster
+holding a verified restore of production runs at `localhost:55432`, database `nebsam_staging`
+(data dir `C:\Users\user\Tools\pgdata-nebsam-staging`, superuser `postgres`). Start it with:
+
+```
+pg_ctl -D C:\Users\user\Tools\pgdata-nebsam-staging -l C:\Users\user\Tools\pgdata-nebsam-staging.log -o "-p 55432 -c listen_addresses=localhost" start
+```
+
+Use it to dry-run and apply migrations against **real production data** before production. It
+cannot run the Next.js app (no Supabase auth/PostgREST), so the app-level regression test in
+§10 still needs a Supabase staging project.
+
 ## Business Rules (never violate)
 
 - Currency is **KES**, formatted `KES 12,500`.
