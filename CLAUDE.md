@@ -196,6 +196,27 @@ the runner printed it, the `--dry-run` output, confirmation that a fresh `pg_dum
 was checked, and the rollback command. Then wait for Kelvin to say go. No exceptions — a live
 CRM that three telemarketers are working in right now does not get an unannounced migration.
 
+## Known issue: RED leads never de-escalate to AMBER
+
+`rag_auto_flag()` rule 3 — the only path from RED back to AMBER — **has never fired**. It tests
+`f.scheduled_date IN (CURRENT_DATE, CURRENT_DATE + 1)`, but `followup_schedule.scheduled_date` is
+`TIMESTAMPTZ` (migration 003) and the app writes a real time of day (`…T15:30:00+03:00`), so the
+date literal coerces to midnight and never matches. Measured on production 2026-09-20: 122
+pending follow-ups, **0** at midnight, **0** matching.
+
+This is a large part of why **2,715 of 3,395 leads are RED**: a rep logs a call and books
+tomorrow's follow-up, and the lead stays red regardless.
+
+`rag_auto_flag_v2` reproduces the bug **deliberately**, because §6.5 requires v2 to match v1
+exactly and calls any difference a bug in v2 rather than an improvement. The corrected predicate
+(`f.scheduled_date::date IN (…)`) sits commented beside it in
+`009c_departments_functions.sql`.
+
+**Decision (Kelvin, 2026-09-20): leave it, revisit after the department work lands.** Enabling
+the fix would re-amber a large share of the queue on its first run — a visible change to the
+team's day that deserves its own measurement and its own go-ahead. Do not "tidy" it up in
+passing.
+
 ## Engineering constraints that have bitten this project before
 
 - **The GoTrue lock rule.** `AuthProvider.onAuthStateChange` must stay non-async and must not
@@ -221,7 +242,9 @@ CRM that three telemarketers are working in right now does not get an unannounce
 - [x] **D1b** — 009, 009b and the seed applied to **production** 2026-09-20 ~19:20 EAT and
       verified. App not deployed; cron and webhook still on v1. See
       `supabase/migrations/_009_applied_record.md`.
-- [ ] **D2** — `*_v2` functions, called by nothing yet. Dry-run diff v2 against v1.
+- [x] **D2** — `009c_departments_functions.sql`: seven functions built and verified on staging.
+      **Not yet applied to production** — Kelvin's decision (2026-09-20) is to hold it until D3
+      is done and ship it alongside the app work. Nothing calls them either way.
 - [ ] **D3** — Types, stores, config plumbing.
 - [ ] **D4** — Manual prospect entry + department-aware leads.
 - [ ] **D5** — Dashboard, backlog, renewals, reorders.
