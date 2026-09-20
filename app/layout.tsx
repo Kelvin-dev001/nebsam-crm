@@ -4,6 +4,7 @@ import "./globals.css"
 import { AppShell } from "@/components/layout/AppShell"
 import { AlarmProvider } from "@/components/layout/AlarmProvider"
 import { AuthProvider } from "@/components/layout/AuthProvider"
+import { DepartmentProvider } from "@/components/layout/DepartmentProvider"
 import { Toaster } from "@/components/ui/sonner"
 
 const geistSans = localFont({
@@ -39,6 +40,7 @@ export default function RootLayout({
         </AppShell>
         <Toaster richColors />
         <AuthProvider />
+        <DepartmentProvider />
         <AlarmProvider />
       </body>
     </html>
