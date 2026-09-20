@@ -22,16 +22,17 @@ Lucide · Sonner · jsPDF · deployed on Vercel.
 
 ## Current Production State (verified 2026-09-20)
 
-**Database — migrations 001–008 applied.**
+**Database — migrations 001–009 applied** (009 + 009b + `seed_departments.sql` on 2026-09-20;
+the app is not yet deployed against them, so nothing reads the new columns yet).
 
 | Table | Rows | Notes |
 |---|---:|---|
-| `leads` | 3,392 | `phone_number` globally UNIQUE via `leads_phone_number_key` |
+| `leads` | ~3,395 | `phone_number` globally UNIQUE via `leads_phone_number_key`; every row now carries `department_id` = telematics |
 | `call_logs` | 1,870 | |
 | `sales` | **0** | No sale has ever been recorded — the renewals path is untested against real data |
 | `followup_schedule` | 122 | |
 | `telemarketers` | 3 | Edith, Janet, Suzzie |
-| `webhook_events` | 17,019 | |
+| `webhook_events` | ~17,029 | |
 | `round_robin_state` | 1 | Single row |
 
 **Functions and jobs**
@@ -217,7 +218,9 @@ CRM that three telemarketers are working in right now does not get an unannounce
       staging copy, capture the pre-migration snapshot.
 - [x] **D1** — `009_departments_additive.sql`, `009b_departments_indexes_concurrent.sql` and
       `seed_departments.sql`, applied and verified on staging. Production untouched.
-- [ ] **D1b** — Apply 009 to production. Nothing else changes.
+- [x] **D1b** — 009, 009b and the seed applied to **production** 2026-09-20 ~19:20 EAT and
+      verified. App not deployed; cron and webhook still on v1. See
+      `supabase/migrations/_009_applied_record.md`.
 - [ ] **D2** — `*_v2` functions, called by nothing yet. Dry-run diff v2 against v1.
 - [ ] **D3** — Types, stores, config plumbing.
 - [ ] **D4** — Manual prospect entry + department-aware leads.
