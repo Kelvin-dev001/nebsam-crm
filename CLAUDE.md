@@ -83,6 +83,11 @@ plus `/api/webhook/whatsapp`, `/api/whatsapp/{send,installed-message,test}`.
 - Migrations 002–008 were applied by hand in the Supabase SQL editor. 009 onward go through
   the runner.
 
+**DEPLOY BLOCKER: 009c must be applied to production before the app ships.** The D4 UI calls
+`create_manual_lead` and `check_phone_across_departments`, which only exist in
+`009c_departments_functions.sql`. That file is on staging but deliberately not on production
+yet. Deploying the app first would give every rep a "New Prospect" button that fails.
+
 **Backups — see `supabase/BACKUP-RESTORE.md` before every migration.** A plain `pg_dump` of the
 whole database *does not work here*: the session pooler drops long `COPY` streams, so the backup
 is taken per-table with keepalives plus a chunked export of `webhook_events`. `pg_restore --list`
@@ -248,7 +253,9 @@ passing.
 - [x] **D3** — Types, `departmentStore`, `useDepartment`, `DepartmentProvider`, phone/kyc/term
       helpers, config-driven `funnelHelpers`. No existing component changed; build, lint and
       tsc all clean.
-- [ ] **D4** — Manual prospect entry + department-aware leads.
+- [x] **D4** — `NewProspectSheet`, `KycFields`, department-scoped `LeadsShell`, config-driven
+      filters/badges/`CallLogModal`. Verified at the data layer on staging; the browser
+      walkthrough still needs the staging anon key.
 - [ ] **D5** — Dashboard, backlog, renewals, reorders.
 - [ ] **D5b** — School Bus: bus register + term billing.
 - [ ] **D6** — Admin: Departments tab, assignment, CSV, reports.
