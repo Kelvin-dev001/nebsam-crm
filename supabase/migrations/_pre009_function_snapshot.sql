@@ -1,20 +1,24 @@
 -- ============================================================================
 -- _pre009_function_snapshot.sql  -- REFERENCE ONLY. DO NOT RUN THIS FILE.
 --
--- The live bodies of every function in public, captured from PRODUCTION
--- (project slnphqsrrjpqcthezgun, PostgreSQL 17.6) on 2026-09-20T12:42:45Z,
--- immediately before Sprint D1 writes migration 009.
+-- Every function in schema public, captured from PRODUCTION (project
+-- slnphqsrrjpqcthezgun, PostgreSQL 17.6) on 2026-09-20T14:51:51Z,
+-- before migration 009.
 --
 -- Why this exists (DEPARTMENTS-MASTER-PROMPT.md section 6.5):
 -- assign_lead_round_robin runs on every inbound WhatsApp message and
 -- rag_auto_flag runs at 05:00 UTC against every lead. 009 must not replace
--- either of them; new behaviour ships as *_v2 alongside. Section 10 requires
--- diffing the post-009 definitions against this file to prove they were left
--- alone.
+-- either; new behaviour ships as *_v2 alongside. Section 10 requires diffing
+-- the post-009 definitions against this file to prove they were left alone.
 --
 -- Running this file would CREATE OR REPLACE the live functions, which is the
 -- exact operation the safety contract forbids. It is committed as evidence and
 -- as the restore path if one of them is ever damaged.
+--
+-- NOTE: this captures ALL public functions, not just the ones the prompt names.
+-- The first capture filtered to four known names and missed rls_auto_enable,
+-- which turns out to matter a great deal for 009 -- see the event triggers at
+-- the foot of this file.
 -- ============================================================================
 
 CREATE OR REPLACE FUNCTION public.assign_lead_round_robin(p_phone text, p_name text, p_message text, p_campaign text, p_raw_payload jsonb)
@@ -162,6 +166,36 @@ BEGIN
 END;
 $function$
 ;
+CREATE OR REPLACE FUNCTION public.rls_auto_enable()
+ RETURNS event_trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog'
+AS $function$
+DECLARE
+  cmd record;
+BEGIN
+  FOR cmd IN
+    SELECT *
+    FROM pg_event_trigger_ddl_commands()
+    WHERE command_tag IN ('CREATE TABLE', 'CREATE TABLE AS', 'SELECT INTO')
+      AND object_type IN ('table','partitioned table')
+  LOOP
+     IF cmd.schema_name IS NOT NULL AND cmd.schema_name IN ('public') AND cmd.schema_name NOT IN ('pg_catalog','information_schema') AND cmd.schema_name NOT LIKE 'pg_toast%' AND cmd.schema_name NOT LIKE 'pg_temp%' THEN
+      BEGIN
+        EXECUTE format('alter table if exists %s enable row level security', cmd.object_identity);
+        RAISE LOG 'rls_auto_enable: enabled RLS on %', cmd.object_identity;
+      EXCEPTION
+        WHEN OTHERS THEN
+          RAISE LOG 'rls_auto_enable: failed to enable RLS on %', cmd.object_identity;
+      END;
+     ELSE
+        RAISE LOG 'rls_auto_enable: skip % (either system schema or not in enforced list: %.)', cmd.object_identity, cmd.schema_name;
+     END IF;
+  END LOOP;
+END;
+$function$
+;
 CREATE OR REPLACE FUNCTION public.set_renewal_due_date()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -185,3 +219,26 @@ END;
 $function$
 ;
 
+
+-- ============================================================================
+-- DATABASE-LEVEL EVENT TRIGGERS (not schema-scoped, so pg_dump --schema=public
+-- does NOT include them -- they are invisible in 00-schema.sql).
+--
+-- ensure_rls is the one that matters: it fires on ddl_command_end for every
+-- CREATE TABLE in public and enables ROW LEVEL SECURITY on the new table
+-- automatically. Migration 009 creates eight tables, so all eight arrive with
+-- RLS already on. A table with RLS enabled and no policy denies everything, so
+-- 009 MUST create its open policies and grants as real statements. The master
+-- prompt section 6A leaves both commented out; following it literally would
+-- leave every new config table returning zero rows to the app.
+--
+-- pgrst_ddl_watch is the reason new tables appear in the PostgREST API without
+-- a manual schema-cache reload.
+-- ============================================================================
+-- EVENT TRIGGER ensure_rls ON ddl_command_end (enabled=O) EXECUTES rls_auto_enable WHEN TAG IN (CREATE TABLE, CREATE TABLE AS, SELECT INTO)
+-- EVENT TRIGGER issue_graphql_placeholder ON sql_drop (enabled=O) EXECUTES set_graphql_placeholder WHEN TAG IN (DROP EXTENSION)
+-- EVENT TRIGGER issue_pg_cron_access ON ddl_command_end (enabled=O) EXECUTES grant_pg_cron_access WHEN TAG IN (CREATE EXTENSION)
+-- EVENT TRIGGER issue_pg_graphql_access ON ddl_command_end (enabled=O) EXECUTES grant_pg_graphql_access WHEN TAG IN (CREATE EXTENSION)
+-- EVENT TRIGGER issue_pg_net_access ON ddl_command_end (enabled=O) EXECUTES grant_pg_net_access WHEN TAG IN (CREATE EXTENSION)
+-- EVENT TRIGGER pgrst_ddl_watch ON ddl_command_end (enabled=O) EXECUTES pgrst_ddl_watch
+-- EVENT TRIGGER pgrst_drop_watch ON sql_drop (enabled=O) EXECUTES pgrst_drop_watch
