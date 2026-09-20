@@ -45,6 +45,15 @@ Lucide · Sonner · jsPDF · deployed on Vercel.
 **RLS** is enabled on all tables but every policy is still `USING (true)`. The auth-scoped
 versions sit commented out in `006_auth.sql`.
 
+**There is an active event trigger, `ensure_rls`**, running `public.rls_auto_enable()` on
+`ddl_command_end` for `CREATE TABLE`. **Every new table in `public` gets RLS enabled
+automatically, the moment it is created.** A table with RLS on and no policy denies everything,
+so *any* migration that creates a table must also create a policy and grant to
+`anon, authenticated, service_role` — otherwise the table silently returns zero rows to the app,
+which looks exactly like data loss. Event triggers are database-level objects, so
+`pg_dump --schema=public` does **not** include them and they are invisible in a schema dump;
+they are recorded in `supabase/migrations/_pre009_function_snapshot.sql`.
+
 **Auth** — Supabase Auth. Role in `auth.users.raw_user_meta_data->>'role'` =
 `admin` | `telemarketer`. `middleware.ts` gates `/admin`, sends admins to `/admin` and reps to
 `/dashboard`.
@@ -89,8 +98,14 @@ pg_ctl -D C:\Users\user\Tools\pgdata-nebsam-staging -l C:\Users\user\Tools\pgdat
 ```
 
 Use it to dry-run and apply migrations against **real production data** before production. It
-cannot run the Next.js app (no Supabase auth/PostgREST), so the app-level regression test in
-§10 still needs a Supabase staging project.
+cannot run the Next.js app (no Supabase auth/PostgREST).
+
+**Supabase staging project** — ref `koifyemtduyyfqpkogpl`, session pooler
+`aws-0-us-east-1.pooler.supabase.com:5432`, in `.env.local` as `STAGING_DATABASE_URL`. Note
+staging is **aws-0** while production is **aws-1**; the hostnames are otherwise identical, which
+is why `migrate-file.mjs --confirm` matches the project ref rather than the host. It holds a
+restore of production (3,393 leads) plus 009, 009b and the department seed. Its `ensure_rls`
+event trigger was recreated by hand after the restore, because a schema-scoped dump omits it.
 
 ## Business Rules (never violate)
 
@@ -200,7 +215,8 @@ CRM that three telemarketers are working in right now does not get an unannounce
 
 - [x] **D0** — Confirm decisions, branch, build the safe runner, back up production, stand up a
       staging copy, capture the pre-migration snapshot.
-- [ ] **D1** — Write and dry-run `009_departments_additive.sql` + `seed_departments.sql` on staging.
+- [x] **D1** — `009_departments_additive.sql`, `009b_departments_indexes_concurrent.sql` and
+      `seed_departments.sql`, applied and verified on staging. Production untouched.
 - [ ] **D1b** — Apply 009 to production. Nothing else changes.
 - [ ] **D2** — `*_v2` functions, called by nothing yet. Dry-run diff v2 against v1.
 - [ ] **D3** — Types, stores, config plumbing.
