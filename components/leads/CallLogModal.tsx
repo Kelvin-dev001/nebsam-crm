@@ -23,6 +23,8 @@ import type { Database } from "@/lib/supabase/types"
 type LeadUpdate = Database["public"]["Tables"]["leads"]["Update"]
 import { useTelemarketerStore } from "@/lib/stores/telemarketerStore"
 import { FunnelStage, RAGStatus, FUNNEL_STAGES, FUNNEL_STAGE_LABELS, PRODUCTS } from "@/types/crm"
+import { useDepartment } from "@/lib/departments/useDepartment"
+import { orderedStages } from "@/lib/utils/funnelHelpers"
 import { cn } from "@/lib/utils"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -36,6 +38,7 @@ export interface CallingLead {
   rag_status: RAGStatus
   location?: string | null
   vehicle_type?: string | null
+  department_id?: string | null
 }
 
 export interface CallSavedPayload {
@@ -110,6 +113,18 @@ export function CallLogModal({ lead, onClose, onSaved, actingTelemarketerId }: P
   const { activeTelemarketer } = useTelemarketerStore()
   // Attribute writes to the passed-in rep (admin all-reps backlog) or the active one.
   const actingId = actingTelemarketerId ?? activeTelemarketer?.id ?? null
+
+  // Stage and product lists come from the lead's department. The original
+  // hardcoded telematics constants stay as the fallback, so the modal is never
+  // left with an empty dropdown if the config has not loaded — a rep mid-call
+  // must always be able to set a stage.
+  const { stages, products } = useDepartment()
+  const stageOptions =
+    stages.length > 0
+      ? orderedStages(stages).map((s) => ({ value: s.key, label: s.label }))
+      : FUNNEL_STAGES.map((s) => ({ value: s as string, label: FUNNEL_STAGE_LABELS[s] }))
+  const productOptions =
+    products.length > 0 ? products.map((p) => p.name) : (PRODUCTS as readonly string[])
   // Toggles are plain React state — NOT react-hook-form fields. setValue-only RHF
   // fields silently collapse to their default at submit, which previously dropped
   // every follow-up and KYC update.
@@ -202,6 +217,7 @@ export function CallLogModal({ lead, onClose, onSaved, actingTelemarketerId }: P
         funnel_stage_after_call: newFunnelStage,
         next_followup_date: hasFollowup ? values.followup_date : null,
         next_followup_notes: hasFollowup ? values.followup_notes : null,
+        department_id: lead.department_id ?? undefined,
       })
       if (logErr) throw logErr
 
@@ -228,6 +244,7 @@ export function CallLogModal({ lead, onClose, onSaved, actingTelemarketerId }: P
           scheduled_date: scheduledDateTime,
           notes: values.followup_notes || null,
           status: "pending",
+          department_id: lead.department_id ?? undefined,
         })
         if (fuErr) throw fuErr
       }
@@ -393,8 +410,8 @@ export function CallLogModal({ lead, onClose, onSaved, actingTelemarketerId }: P
               {...register("funnel_stage")}
               className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-ring"
             >
-              {FUNNEL_STAGES.map((s) => (
-                <option key={s} value={s}>{FUNNEL_STAGE_LABELS[s]}</option>
+              {stageOptions.map((s) => (
+                <option key={s.value} value={s.value}>{s.label}</option>
               ))}
             </select>
           </div>
@@ -439,7 +456,7 @@ export function CallLogModal({ lead, onClose, onSaved, actingTelemarketerId }: P
                       className="w-full h-8 rounded-md border border-input bg-background px-2 text-xs text-slate-700 focus:outline-none"
                     >
                       <option value="">— same —</option>
-                      {PRODUCTS.map((p) => <option key={p} value={p}>{p}</option>)}
+                      {productOptions.map((p) => <option key={p} value={p}>{p}</option>)}
                     </select>
                   </div>
                 </div>

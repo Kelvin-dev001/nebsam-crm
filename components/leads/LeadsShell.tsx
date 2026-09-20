@@ -25,12 +25,14 @@ import { RAGBadge } from "./RAGBadge"
 import { LeadFilters } from "./LeadFilters"
 import { LeadTable } from "./LeadTable"
 import { CallLogModal, type CallSavedPayload } from "./CallLogModal"
+import { NewProspectSheet, type NewProspectResult } from "./NewProspectSheet"
+import { useDepartment } from "@/lib/departments/useDepartment"
 import { ChatModal } from "@/components/chat/ChatModal"
 import type { ChatLead } from "@/components/chat/WhatsAppChat"
 import { formatDate } from "@/lib/utils/dateHelpers"
 import { isPast } from "date-fns"
 import { cn } from "@/lib/utils"
-import { Users } from "lucide-react"
+import { Users, Plus } from "lucide-react"
 import { toast } from "sonner"
 
 export interface CallNoteEntry {
@@ -58,10 +60,14 @@ export interface ProcessedLead {
   next_followup: string | null
   call_count: number
   call_history: CallNoteEntry[]
+  department_id: string | null
+  company_name: string | null
 }
 
 export function LeadsShell() {
   const { activeTelemarketer } = useTelemarketerStore()
+  const { department } = useDepartment()
+  const [newProspectOpen, setNewProspectOpen] = useState(false)
   const [data, setData] = useState<ProcessedLead[]>([])
   const [loading, setLoading] = useState(true)
   const [callingLead, setCallingLead] = useState<ProcessedLead | null>(null)
@@ -80,11 +86,16 @@ export function LeadsShell() {
 
     ;(async () => {
       try {
-        const { data: raw, error } = await supabase
+        // assigned_to already scopes to this rep; the department predicate is
+        // defence in depth, so a lead mis-assigned across departments can never
+        // surface in the wrong queue.
+        let query = supabase
           .from("leads")
           .select("*, call_logs(called_at, call_outcome, call_notes), followup_schedule(scheduled_date, status)")
           .eq("assigned_to", activeTelemarketer.id)
-          .order("updated_at", { ascending: false })
+        if (department?.id) query = query.eq("department_id", department.id)
+
+        const { data: raw, error } = await query.order("updated_at", { ascending: false })
         if (error) console.error("LeadsShell fetch error:", error)
         if (!raw) return
 
@@ -115,6 +126,8 @@ export function LeadsShell() {
             assigned_to: lead.assigned_to,
             created_at: lead.created_at,
             updated_at: lead.updated_at,
+            department_id: lead.department_id ?? null,
+            company_name: lead.company_name ?? null,
             last_called: sortedCalls[0]?.called_at ?? null,
             next_followup: pendingFollowups[0]?.scheduled_date ?? null,
             call_count: sortedCalls.length,
@@ -133,7 +146,7 @@ export function LeadsShell() {
         setLoading(false)
       }
     })()
-  }, [activeTelemarketer])
+  }, [activeTelemarketer, department?.id])
 
   // Realtime subscription — new and updated leads appear instantly
   useEffect(() => {
@@ -152,6 +165,7 @@ export function LeadsShell() {
         },
         (payload) => {
           const raw = payload.new as ProcessedLead
+          if (department?.id && raw.department_id && raw.department_id !== department.id) return
           const newLead: ProcessedLead = {
             id: raw.id,
             phone_number: raw.phone_number,
@@ -165,6 +179,8 @@ export function LeadsShell() {
             vehicle_type: raw.vehicle_type,
             whatsapp_message: raw.whatsapp_message,
             assigned_to: raw.assigned_to,
+            department_id: raw.department_id ?? null,
+            company_name: raw.company_name ?? null,
             created_at: raw.created_at,
             updated_at: raw.updated_at,
             last_called: null,
@@ -208,7 +224,13 @@ export function LeadsShell() {
       .subscribe()
 
     return () => { supabase.removeChannel(channel) }
-  }, [activeTelemarketer])
+  }, [activeTelemarketer, department?.id])
+
+  // Telematics sells to individuals and receives inbound WhatsApp; the three
+  // new departments sell to organisations and are phone-only in v1 (decision:
+  // the chat panel stays hidden for them).
+  const isB2B = Boolean(department && department.slug !== "telematics")
+  const showWhatsApp = !department || department.lead_intake === "whatsapp_webhook"
 
   const columns = useMemo<ColumnDef<ProcessedLead>[]>(
     () => [
@@ -236,6 +258,19 @@ export function LeadsShell() {
             <span className="text-slate-400 italic text-xs">Unknown</span>
           ),
       },
+      ...(isB2B
+        ? [{
+            id: "company_name",
+            accessorKey: "company_name",
+            header: "Company",
+            cell: ({ row }: { row: { original: ProcessedLead } }) =>
+              row.original.company_name ? (
+                <span className="text-slate-800 font-medium text-sm">{row.original.company_name}</span>
+              ) : (
+                <span className="text-slate-400 italic text-xs">—</span>
+              ),
+          } as ColumnDef<ProcessedLead>]
+        : []),
       {
         id: "product_interested",
         accessorKey: "product_interested",
@@ -249,7 +284,12 @@ export function LeadsShell() {
         id: "funnel_stage",
         accessorKey: "funnel_stage",
         header: "Stage",
-        cell: ({ row }) => <FunnelStageBadge stage={row.original.funnel_stage} />,
+        cell: ({ row }) => (
+          <FunnelStageBadge
+            stage={row.original.funnel_stage}
+            departmentId={row.original.department_id}
+          />
+        ),
         filterFn: "equals",
       },
       {
@@ -330,15 +370,17 @@ export function LeadsShell() {
               <Phone className="h-3 w-3" />
               Call Now
             </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              title="WhatsApp Chat"
-              className="h-7 w-7 p-0 text-green-600 border-green-200 hover:bg-green-50 hover:border-green-300"
-              onClick={() => setChatLead(row.original)}
-            >
-              <MessageCircle className="h-3.5 w-3.5" />
-            </Button>
+            {showWhatsApp && (
+              <Button
+                size="sm"
+                variant="outline"
+                title="WhatsApp Chat"
+                className="h-7 w-7 p-0 text-green-600 border-green-200 hover:bg-green-50 hover:border-green-300"
+                onClick={() => setChatLead(row.original)}
+              >
+                <MessageCircle className="h-3.5 w-3.5" />
+              </Button>
+            )}
             <Link
               href={`/leads/${row.original.id}`}
               className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "h-7 px-2 text-xs")}
@@ -349,7 +391,7 @@ export function LeadsShell() {
         ),
       },
     ],
-    []
+    [isB2B, showWhatsApp]
   )
 
   const table = useReactTable({
@@ -395,6 +437,43 @@ export function LeadsShell() {
     )
   }
 
+  /**
+   * A prospect created in the sheet is inserted at the top of the queue
+   * immediately. The row is built from the RPC's returned lead, so it is real
+   * data rather than a guess; realtime will also deliver it, and the id guard
+   * below stops it appearing twice.
+   */
+  function handleProspectCreated(lead: NewProspectResult) {
+    setData((prev) => {
+      if (prev.some((l) => l.id === lead.id)) return prev
+      return [
+        {
+          id: lead.id,
+          phone_number: lead.phone_number,
+          full_name: lead.full_name,
+          product_interested: lead.product_interested,
+          funnel_stage: lead.funnel_stage as ProcessedLead["funnel_stage"],
+          rag_status: lead.rag_status as ProcessedLead["rag_status"],
+          lead_source: "manual",
+          campaign_name: null,
+          location: null,
+          vehicle_type: null,
+          whatsapp_message: null,
+          assigned_to: activeTelemarketer?.id ?? null,
+          department_id: lead.department_id,
+          company_name: lead.company_name,
+          created_at: lead.created_at,
+          updated_at: lead.updated_at,
+          last_called: null,
+          next_followup: null,
+          call_count: 0,
+          call_history: [],
+        },
+        ...prev,
+      ]
+    })
+  }
+
   if (!activeTelemarketer) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3 text-center p-6">
@@ -416,8 +495,13 @@ export function LeadsShell() {
           <h1 className="text-2xl font-bold text-slate-900">My Leads</h1>
           <p className="text-slate-500 text-sm mt-0.5">
             {loading ? "Loading…" : `${table.getFilteredRowModel().rows.length} of ${data.length} leads`}
+            {department ? ` · ${department.name}` : ""}
           </p>
         </div>
+        <Button onClick={() => setNewProspectOpen(true)} className="gap-1.5">
+          <Plus className="h-4 w-4" />
+          New Prospect
+        </Button>
       </div>
 
       <LeadFilters table={table} globalFilter={globalFilter} onGlobalFilterChange={setGlobalFilter} />
@@ -437,6 +521,12 @@ export function LeadsShell() {
       <LeadNotesDialog
         lead={notesLead}
         onClose={() => setNotesLead(null)}
+      />
+
+      <NewProspectSheet
+        open={newProspectOpen}
+        onClose={() => setNewProspectOpen(false)}
+        onCreated={handleProspectCreated}
       />
     </div>
   )
