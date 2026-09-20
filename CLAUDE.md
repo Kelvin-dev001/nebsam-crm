@@ -245,7 +245,9 @@ passing.
 - [x] **D2** — `009c_departments_functions.sql`: seven functions built and verified on staging.
       **Not yet applied to production** — Kelvin's decision (2026-09-20) is to hold it until D3
       is done and ship it alongside the app work. Nothing calls them either way.
-- [ ] **D3** — Types, stores, config plumbing.
+- [x] **D3** — Types, `departmentStore`, `useDepartment`, `DepartmentProvider`, phone/kyc/term
+      helpers, config-driven `funnelHelpers`. No existing component changed; build, lint and
+      tsc all clean.
 - [ ] **D4** — Manual prospect entry + department-aware leads.
 - [ ] **D5** — Dashboard, backlog, renewals, reorders.
 - [ ] **D5b** — School Bus: bus register + term billing.
