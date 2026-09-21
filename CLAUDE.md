@@ -1,5 +1,8 @@
 # Nebsam CRM — Project Memory
 
+> **Handing this over or picking it up? Read `HANDOVER.md`.** It covers what is live, the one
+> remaining sprint, and the traps that are invisible until they bite.
+
 ## Project Overview
 
 A full-stack CRM for **Nebsam Digital Solutions**, a Kenyan digital marketing company running
@@ -22,7 +25,9 @@ Lucide · Sonner · jsPDF · deployed on Vercel.
 
 ## Current Production State (verified 2026-09-20)
 
-**Database — migrations 001–009 applied, plus 009c / 009d / 009e** (009 + 009b + `seed_departments.sql` on 2026-09-20;
+**Database — migrations 001–010 applied** (009, 009b, 009c, 009d, 009e, `seed_departments.sql`,
+010 cutover). `department_id` is NOT NULL throughout; the phone key is per-department; the cron
+runs `rag_auto_flag_v2`. (009 + 009b + `seed_departments.sql` on 2026-09-20;
 the app is not yet deployed against them, so nothing reads the new columns yet).
 
 | Table | Rows | Notes |
@@ -280,8 +285,10 @@ passing.
       `generate_term_billings` wired to the UI. Term calendar still empty until D6.
 - [x] **D6** — Departments tab (stage/KYC/product/term-calendar editors, rep assignment),
       CSV import with department + KYC mapping, reports grouped by department, admin filters.
-- [ ] **D7** — Deploy the app, then run the 010 cutover.
-- [ ] **D8** — RLS (`011`), after a soak.
+- [x] **D7** — App deployed to production 2026-09-21; migration 010 cutover applied and verified.
+- [ ] **D8** — RLS (`011`), after a soak. **The only remaining sprint.** Every policy is still
+      `USING (true)`; department isolation is enforced in the app, not the database. Do this
+      before the new reps start. See `HANDOVER.md`.
 
 Sprint detail, acceptance criteria and the verification checklist live in
 `DEPARTMENTS-MASTER-PROMPT.md` §9 and §10.

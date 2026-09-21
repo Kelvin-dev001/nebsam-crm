@@ -1,0 +1,198 @@
+# Nebsam CRM — Multi-Department Expansion: Handover
+
+**Status: live in production.** Sprints D0–D7 complete. One sprint (D8, RLS) deliberately
+outstanding. Completed 2026-09-21.
+
+Read `CLAUDE.md` first for the standing project rules. This document covers what changed, what
+is left, and the things that will bite you if nobody tells you about them.
+
+---
+
+## What is live
+
+Three new departments alongside the original telematics team, on **one shared `leads` table with
+`department_id`** — no per-department tables.
+
+| Department | Post-sale model | Lead intake | Leads today |
+|---|---|---|---:|
+| Vehicle Telematics | `annual_renewal` | WhatsApp webhook | 3,431 |
+| Container E-Seal | `consumption` (reorders) | manual | 0 |
+| Fuel Monitoring | `subscription` (contract end) | manual | 0 |
+| School Bus Solution | `term_contract` (3 terms/yr) | manual | 0 |
+
+**Migrations applied to production**, in order: `009` (additive) · `009b` (concurrent indexes) ·
+`seed_departments.sql` · `009e` (function grant lockdown) · `009c` (department functions) ·
+`009d` (admin functions) · `009e` again · `010` (cutover).
+
+**App**: deployed to Vercel, serving `nebsam-crm.vercel.app`. New surfaces: manual prospect entry,
+`/reorders`, `/buses`, `/term-billing`, Admin → Departments.
+
+---
+
+## What is NOT done
+
+### D8 — RLS (`011_department_rls.sql`)
+
+**The only remaining sprint, and deliberately so.** The spec says it runs after 010 has soaked
+for several days. 010 landed 2026-09-21.
+
+Today every RLS policy is still `USING (true)` — the same posture the system has had since
+migration 001. Department isolation is enforced **in the application**, not the database: every
+query carries a `department_id` predicate and reps are scoped by `assigned_to`. That is genuine
+isolation for normal use, but it is not a security boundary — anyone with the anon key and a
+signed-in session could in principle read across departments through PostgREST.
+
+That matters more now than it did before: there are four departments instead of one. Do D8
+before the new reps start.
+
+It is also the highest-risk change in the project. A wrong policy makes data invisible to the
+people who own it, which looks exactly like data loss. Apply to staging, verify with raw
+anon-key queries per role, then production in a quiet window with the rollback SQL open.
+
+### Deferred by explicit decision
+
+- **Rule 3 of the RAG cron never fires.** Documented at length in `CLAUDE.md`. Kelvin's call was
+  to leave it. See "Things worth knowing" below — the measurement changes what the fix should be.
+- **Overdue commitments are hidden from the dashboard widget.** Pre-existing telematics
+  behaviour; the widget queries `today..+60d`, so an overdue renewal or reorder drops off
+  entirely. Changing it is a visible change to the team's morning.
+- **`components/dashboard/UpcomingRenewals.tsx` is unused** — superseded by
+  `UpcomingCommitments.tsx`. Safe to delete.
+- **Lead Detail Tab 5 "Buses"** and the `term_contract` variant of the Sale tab (§7.4) were not
+  built. `LeadDetailTabs.tsx` is 640 lines and holds the working telematics sale form; the
+  standalone `/buses` and `/term-billing` pages cover the functionality.
+
+### Needs Kelvin, not code
+
+- **Real Kenyan term dates.** `academic_terms` is empty on purpose — the spec forbids guessing
+  them. Until they are entered in Admin → Departments, School Bus term billing cannot generate
+  and the RAG holiday hold is inactive. Every School Bus surface degrades gracefully and says so.
+- **New department reps.** None exist yet, by decision — which is why the round-robin bug could
+  never fire during the migration window. Add them via Admin → Departments once D8 is done.
+
+---
+
+## Things that will bite you
+
+### 1. `REVOKE ... FROM PUBLIC` does not remove `anon`
+
+Supabase sets `ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT EXECUTE ON FUNCTIONS TO anon,
+authenticated, service_role`. **Every function you create in `public` is executable by `anon` —
+the key that ships inside the browser bundle.** Revoking PUBLIC leaves the explicit `anon` grant
+untouched.
+
+This was found live: with nothing but the public anon key it was possible to call
+`create_manual_lead` and **create a lead**, read other departments' lead summaries, and run
+`rag_auto_flag_v2`. Two pre-existing functions (`assign_lead_round_robin`, `rag_auto_flag`) had
+been exposed this way since long before this project.
+
+**After any migration that creates a function, re-run `009e_function_grants.sql`.** It iterates
+the catalogue and is idempotent for exactly this reason. `scripts/departments-check.mjs` asserts
+`anon` is refused, so it will fail if someone forgets.
+
+### 2. `leads_dept_phone_uniq` is an INDEX, not a CONSTRAINT
+
+009b built it with `CREATE UNIQUE INDEX CONCURRENTLY`, so it does not appear in `pg_constraint`.
+Do not read that absence as "phone uniqueness is gone". Check `pg_index` and confirm
+`indisvalid = true` — a failed `CONCURRENTLY` build leaves an INVALID index that silently
+enforces nothing.
+
+### 3. Any `UPDATE` on `leads` rewrites `updated_at`
+
+`leads` carries a `BEFORE UPDATE` trigger setting `updated_at = now()`. The queue sorts on it and
+the team reads it as "when did we last deal with this client". A bulk update stamps every
+affected row as just-touched and destroys that ordering permanently.
+
+Both places that touch lead rows in bulk — 009's backfill and `rename_funnel_stage` — suppress
+the trigger and restore it in the same transaction. Do the same, and verify
+`tgenabled = 'O'` afterwards.
+
+### 4. Telematics KYC fields are columns, not JSONB
+
+`full_name`, `location`, `vehicle_type`, `product_interested` are real columns on `leads`, and
+`company_name` is promoted out of the JSONB for indexing and reporting. `PROMOTED_KYC_KEYS` in
+`types/crm.ts` drives every read and write. A renderer that blindly writes these into `leads.kyc`
+makes the team's names and locations vanish from the leads table and from reports **while still
+looking correct in the modal**.
+
+### 5. Backups: a single `pg_dump` does not work here
+
+The session pooler drops long `COPY` streams. Backups are taken per-table with keepalives plus a
+chunked CSV export of `webhook_events`. `pg_restore --list` does **not** verify a backup — a
+truncated dump still lists its TOC. Only a real restore verifies one.
+
+When restoring, **drop `webhook_events_lead_id_fkey` first**: `psql \copy` enforces it even
+though `pg_restore --disable-triggers` does not. Full procedure in `supabase/BACKUP-RESTORE.md`.
+
+### 6. The GoTrue lock and the RHF toggle rules
+
+Both predate this work, both are recorded in `CLAUDE.md`, and both have already caused outages.
+`AuthProvider.onAuthStateChange` must stay non-async. Toggles must be plain React state, never
+`setValue`-only RHF fields.
+
+---
+
+## The point of no return
+
+```sql
+ALTER TABLE leads ADD CONSTRAINT leads_phone_number_key UNIQUE (phone_number);
+```
+
+That is the 010 rollback line, and it only succeeds **while no two departments share a phone
+number**. The moment a rep enters a number telematics already holds, the global constraint can
+never be restored: the cron and the `NOT NULL`s still revert, the phone key does not.
+
+**Not yet crossed** — the three new departments hold zero leads. It closes the first time someone
+uses the feature, which is the entire point of decision D2. Just know where the door is.
+
+---
+
+## Operational notes
+
+- **Migrations** run through `scripts/migrate-file.mjs`, never `scripts/migrate.mjs` (hardcoded
+  to `001`, and `--seed` would pollute production with demo data). Always `--dry-run` first; a
+  real apply needs `--confirm=<project-ref>`, matched against the ref rather than the hostname
+  because Supabase pooler hostnames are shared per region.
+- **`DATABASE_URL` is the transaction pooler (6543)** and cannot run migrations or `pg_dump`. Use
+  `MIGRATION_DATABASE_URL` (session pooler, 5432). The runner refuses 6543 outright.
+- **Deploys** need `vercel --prod --scope kelvins-projects-1de5cca3`. Without the explicit scope
+  it fails "Not authorized". The project is **not** connected to GitHub, so pushing to `main`
+  deploys nothing.
+- **Checklist**: `node scripts/departments-check.mjs [--target=production]`. Production is
+  read-only mode. Last run: **19/19**.
+- **Staging** is Supabase project `koifyemtduyyfqpkogpl` (aws-**0**-us-east-1; production is
+  aws-**1**). It holds a restore of production plus every migration.
+
+---
+
+## What to watch next
+
+1. **The 05:00 UTC cron on 2026-09-22** is the first run on `rag_auto_flag_v2`. v2 was proven on
+   staging to produce byte-identical per-lead output to v1 across 3,393 leads, so the RAG spread
+   should not move beyond normal daily drift. Compare against the previous morning.
+2. **The first manually entered prospect** in a new department — the first real exercise of
+   `create_manual_lead` in production.
+3. **The first cross-department duplicate number**, which crosses the point of no return above.
+
+---
+
+## Two findings worth acting on, unrelated to the migration
+
+**The follow-up book is stale.** 120 of 125 pending follow-ups are overdue:
+
+| Rep | Overdue | Oldest |
+|---|---:|---|
+| Edith | 72 | 2026-07-24 |
+| Janet | 35 | 2026-07-23 |
+| Suzzie | 13 | 2026-09-10 |
+
+No RAG rule fixes this, and it is visible and actionable today.
+
+**RED is a one-way door.** 2,715 of 3,431 leads are RED — 79%. Rule 2 puts leads in after 14 days
+of silence; rule 3 is the only way out and it has never fired. **87 RED leads have been called in
+the last 14 days** and are still flagged cold.
+
+Fixing rule 3's date bug alone moves **zero** leads, because only 2 follow-ups are due today and
+none tomorrow. The real question is a business one: *should a lead a rep spoke to this week still
+be RED?* Measured answers are in the session record; the decision is not a bug fix and should not
+be made inside a migration.
