@@ -1,5 +1,6 @@
 import { UserMenu } from "./UserMenu"
 import { NotificationBell } from "./NotificationBell"
+import { DepartmentSwitcher } from "./DepartmentSwitcher"
 
 export function Header() {
   return (
@@ -7,6 +8,7 @@ export function Header() {
       <span className="text-base font-bold text-slate-800 lg:hidden">Nebsam CRM</span>
       <div className="hidden lg:block" />
       <div className="flex items-center gap-2">
+        <DepartmentSwitcher />
         <NotificationBell />
         <UserMenu />
       </div>
