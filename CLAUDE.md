@@ -258,7 +258,8 @@ passing.
       walkthrough still needs the staging anon key.
 - [x] **D5** — `UpcomingCommitments`, `/reorders` + `ReordersShell`, department-aware nav and
       middleware route guard, department-scoped backlog and renewals.
-- [ ] **D5b** — School Bus: bus register + term billing.
+- [x] **D5b** — `/buses` + `BusRegisterShell`, `/term-billing` + `TermBillingShell`,
+      `generate_term_billings` wired to the UI. Term calendar still empty until D6.
 - [ ] **D6** — Admin: Departments tab, assignment, CSV, reports.
 - [ ] **D7** — Deploy the app, then run the 010 cutover.
 - [ ] **D8** — RLS (`011`), after a soak.
