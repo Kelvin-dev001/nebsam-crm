@@ -5,6 +5,7 @@ import {
   Inbox,
   PackageCheck,
   CalendarClock,
+  Bus,
   type LucideIcon,
 } from "lucide-react"
 import type { PostSaleModel } from "@/types/crm"
@@ -39,6 +40,16 @@ export const BASE_NAV: NavItem[] = [
   { href: "/backlog", label: "Backlog", icon: Inbox },
 ]
 
+/**
+ * Extra items a model needs beyond its single post-sale page. School Bus is the
+ * only department with a child-asset model, so it gets the bus register too.
+ */
+export function extraNavItemsFor(model: PostSaleModel | null | undefined): NavItem[] {
+  return model === "term_contract"
+    ? [{ href: "/buses", label: "Buses", icon: Bus }]
+    : []
+}
+
 /** The post-sale nav item for a model, or null when there is nothing to chase. */
 export function postSaleNavItem(model: PostSaleModel | null | undefined): NavItem | null {
   switch (model) {
@@ -62,7 +73,7 @@ export function postSaleNavItem(model: PostSaleModel | null | undefined): NavIte
 
 export function navItemsFor(model: PostSaleModel | null | undefined): NavItem[] {
   const postSale = postSaleNavItem(model)
-  return postSale ? [...BASE_NAV, postSale] : [...BASE_NAV]
+  return [...BASE_NAV, ...(postSale ? [postSale] : []), ...extraNavItemsFor(model)]
 }
 
 /**
