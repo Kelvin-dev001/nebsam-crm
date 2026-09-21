@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect } from "react"
+import { usePathname } from "next/navigation"
 import { loadDepartmentConfig } from "@/lib/departments/useDepartment"
 import { useDepartmentStore } from "@/lib/stores/departmentStore"
 
@@ -24,12 +25,25 @@ import { useDepartmentStore } from "@/lib/stores/departmentStore"
  * per-user, so loading it once on mount is sufficient.
  */
 export function DepartmentProvider() {
+  const pathname = usePathname()
   const loaded = useDepartmentStore((s) => s.loaded)
+  const error = useDepartmentStore((s) => s.error)
 
   useEffect(() => {
-    if (loaded) return
+    // Migration 011 restricts the config tables to `authenticated`, so there is
+    // nothing to load for a signed-out visitor. Skipping /login matters for a
+    // subtler reason than tidiness: loadDepartmentConfig marks the store
+    // `loaded` on failure as well as success, so one refused attempt on the
+    // login page would have left the app permanently unconfigured for that
+    // session — falling back to hardcoded telematics behaviour with no retry.
+    if (pathname === "/login") return
+
+    // Retry if a previous attempt failed, e.g. it ran before the session was
+    // established.
+    if (loaded && !error) return
+
     void loadDepartmentConfig()
-  }, [loaded])
+  }, [pathname, loaded, error])
 
   return null
 }

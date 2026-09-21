@@ -52,21 +52,50 @@ const na = (id, m) => { skip++; lines.push(`  SKIP  ${id}  ${m}`) }
 console.log(`\nSection 10 checklist — target: ${target}${READ_ONLY ? " (READ-ONLY)" : ""}`)
 console.log(`  ${URL}\n`)
 
-// ── A. Structure and config ────────────────────────────────────────────────
+// ── A. Posture detection ───────────────────────────────────────────────────
+// Migration 011 restricts the config tables to `authenticated`. Before it, anon
+// could read them; after it, anon reads nothing. Both are valid states of this
+// database, so detect which one we are in rather than asserting a fixed answer
+// and reporting a security improvement as a failure.
 
 const TABLES = [
   "departments", "funnel_stages", "kyc_fields", "department_products",
   "service_orders", "academic_terms", "school_buses", "term_billings",
 ]
 
-for (const t of TABLES) {
-  const { error, count } = await sbAnon.from(t).select("*", { count: "exact", head: true })
-  if (error) bad("A1", `${t} not readable by anon: ${error.message}`)
-  else ok("A1", `${t} readable by anon (${count} rows)`)
+const { count: anonDeptCount } = await sbAnon
+  .from("departments").select("*", { count: "exact", head: true })
+const RLS_LOCKED = !anonDeptCount   // 0 or null => 011 has been applied
+
+console.log(
+  RLS_LOCKED
+    ? "  posture: RLS LOCKED (011 applied) - anon should see nothing"
+    : "  posture: OPEN policies (pre-011) - anon can still read config",
+)
+
+// A privileged client for the structural checks. Production has the service
+// key in .env.local; staging is checked through the SQL suites instead.
+const sbCfg = sbAdmin ?? (RLS_LOCKED ? null : sbAnon)
+
+if (RLS_LOCKED) {
+  // The whole point of 011: a signed-out caller sees nothing at all.
+  for (const t of ["leads", "call_logs", "sales", "followup_schedule", ...TABLES]) {
+    const { data, error, count } = await sbAnon
+      .from(t).select("*", { count: "exact", head: true })
+    if (error) ok("A1", `anon blocked from ${t} (${error.code})`)
+    else if ((count ?? 0) === 0 && !data?.length) ok("A1", `anon sees 0 rows in ${t}`)
+    else bad("A1", `ANON CAN READ ${t}: ${count} rows`)
+  }
+} else {
+  for (const t of TABLES) {
+    const { error, count } = await sbAnon.from(t).select("*", { count: "exact", head: true })
+    if (error) bad("A1", `${t} not readable: ${error.message}`)
+    else ok("A1", `${t} readable (${count} rows)`)
+  }
 }
 
-{
-  const { data, error } = await sbAnon.from("departments").select("slug, post_sale_model").order("sort_order")
+if (sbCfg) {
+  const { data, error } = await sbCfg.from("departments").select("slug, post_sale_model").order("sort_order")
   const want = {
     telematics: "annual_renewal", container_eseal: "consumption",
     fuel_monitoring: "subscription", school_bus: "term_contract",
@@ -74,21 +103,20 @@ for (const t of TABLES) {
   if (error) bad("A2", error.message)
   else {
     const got = Object.fromEntries((data ?? []).map((d) => [d.slug, d.post_sale_model]))
-    const wrong = Object.entries(want).filter(([s, m]) => got[s] !== m)
+    const wrong = Object.entries(want).filter(([sl, m]) => got[sl] !== m)
     if (wrong.length) bad("A2", `post_sale_model mismatch: ${JSON.stringify(wrong)}`)
     else ok("A2", "four departments with the right post-sale models")
   }
-}
 
-{
-  // The ten telematics stages rag_auto_flag v1 treats as active. If this drifts,
-  // v2 silently stops matching v1.
-  const { data: dept } = await sbAnon.from("departments").select("id").eq("slug", "telematics").single()
-  const { data, error } = await sbAnon
+  const { data: dept } = await sbCfg.from("departments").select("id").eq("slug", "telematics").single()
+  const { data: st, error: stErr } = await sbCfg
     .from("funnel_stages").select("key").eq("department_id", dept?.id).eq("is_active_stage", true)
-  if (error) bad("A3", error.message)
-  else if ((data ?? []).length !== 10) bad("A3", `telematics has ${data.length} active stages, expected 10`)
+  if (stErr) bad("A3", stErr.message)
+  else if ((st ?? []).length !== 10) bad("A3", `telematics has ${st.length} active stages, expected 10`)
   else ok("A3", "telematics has exactly 10 active stages (matches rag_auto_flag v1)")
+} else {
+  na("A2", "config assertions need a privileged client; covered by the SQL suites on staging")
+  na("A3", "as above")
 }
 
 // ── B. Security: anon must not reach privileged functions ──────────────────
@@ -107,20 +135,20 @@ for (const fn of ["create_manual_lead", "check_phone_across_departments", "rag_a
 
 // ── C. Data integrity ──────────────────────────────────────────────────────
 
-{
-  const { count, error } = await sbAnon.from("leads").select("*", { count: "exact", head: true })
+if (sbCfg) {
+  const { count, error } = await sbCfg.from("leads").select("*", { count: "exact", head: true })
     .is("department_id", null)
-  if (error) na("C1", `leads not readable by anon (expected once 011 lands): ${error.message}`)
+  if (error) na("C1", `leads not readable: ${error.message}`)
   else if (count > 0) bad("C1", `${count} leads have NULL department_id`)
   else ok("C1", "no leads with NULL department_id")
-}
+} else na("C1", "needs a privileged client (covered by the SQL suites)")
 
 {
   // Every live funnel_stage / product value must have a config row, or badges
   // and dropdowns lose their values.
-  const { data: leads } = await sbAnon.from("leads").select("department_id, funnel_stage, product_interested").limit(5000)
-  const { data: stages } = await sbAnon.from("funnel_stages").select("department_id, key")
-  const { data: prods } = await sbAnon.from("department_products").select("department_id, name")
+  const { data: leads } = sbCfg ? await sbCfg.from("leads").select("department_id, funnel_stage, product_interested").limit(5000) : { data: null }
+  const { data: stages } = await (sbCfg ?? sbAnon).from("funnel_stages").select("department_id, key")
+  const { data: prods } = await (sbCfg ?? sbAnon).from("department_products").select("department_id, name")
   if (!leads) na("C2", "leads not readable by anon")
   else {
     const stageSet = new Set((stages ?? []).map((s) => `${s.department_id}|${s.key}`))
@@ -137,16 +165,21 @@ for (const fn of ["create_manual_lead", "check_phone_across_departments", "rag_a
 // ── D. Department isolation, as the app sees it ────────────────────────────
 
 {
-  const { data: depts } = await sbAnon.from("departments").select("id, slug")
+  if (!sbCfg) { na("D1", "needs a privileged client — an empty anon result would assert nothing") }
+  const { data: depts } = sbCfg
+    ? await sbCfg.from("departments").select("id, slug")
+    : { data: [] }
   const byDept = {}
   for (const d of depts ?? []) {
-    const { count } = await sbAnon.from("leads").select("*", { count: "exact", head: true })
+    const { count } = await (sbCfg ?? sbAnon).from("leads").select("*", { count: "exact", head: true })
       .eq("department_id", d.id)
     byDept[d.slug] = count ?? 0
   }
   const total = Object.values(byDept).reduce((a, b) => a + b, 0)
-  const { count: all } = await sbAnon.from("leads").select("*", { count: "exact", head: true })
-  if (all == null) na("D1", "leads not readable by anon")
+  const { count: all } = sbCfg
+    ? await sbCfg.from("leads").select("*", { count: "exact", head: true })
+    : { count: null }
+  if (all == null) na("D1", "leads not readable without a privileged client")
   else if (total !== all) bad("D1", `per-department total ${total} != overall ${all}`)
   else ok("D1", `every lead belongs to exactly one department (${JSON.stringify(byDept)})`)
 }
