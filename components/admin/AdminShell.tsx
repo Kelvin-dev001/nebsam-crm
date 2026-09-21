@@ -2,6 +2,8 @@
 
 import { Users, LayoutList, BarChart2, UserCog, Upload, FileBarChart, Activity } from "lucide-react"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
+import { Building2 } from "lucide-react"
+import { DepartmentManager } from "./DepartmentManager"
 import { AllLeadsOverview } from "./AllLeadsOverview"
 import { LeadAssignment } from "./LeadAssignment"
 import { PerformanceSummary } from "./PerformanceSummary"
@@ -27,6 +29,10 @@ export function AdminShell() {
           variant="line"
           className="border-b border-slate-200 w-full rounded-none pb-0 gap-0 sticky top-16 bg-white z-20 h-auto"
         >
+          <TabsTrigger value="departments" className="gap-1.5 px-4 pb-3 text-sm">
+            <Building2 className="h-3.5 w-3.5" />
+            Departments
+          </TabsTrigger>
           <TabsTrigger value="overview" className="gap-1.5 px-4 pb-3 text-sm">
             <LayoutList className="h-4 w-4" />
             All Leads
@@ -57,6 +63,9 @@ export function AdminShell() {
           </TabsTrigger>
         </TabsList>
 
+        <TabsContent value="departments" className="mt-4">
+          <DepartmentManager />
+        </TabsContent>
         <TabsContent value="overview" className="mt-4">
           <AllLeadsOverview />
         </TabsContent>

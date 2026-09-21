@@ -6,6 +6,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table"
 import { createClient } from "@/lib/supabase/client"
+import { useDepartmentStore } from "@/lib/stores/departmentStore"
 import { format, startOfMonth, endOfMonth } from "date-fns"
 
 interface TelemarketerStats {
@@ -21,6 +22,8 @@ interface TelemarketerStats {
 
 export function PerformanceSummary() {
   const [stats, setStats] = useState<TelemarketerStats[]>([])
+  const [departmentFilter, setDepartmentFilter] = useState("")
+  const departments = useDepartmentStore((st) => st.departments)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -30,13 +33,25 @@ export function PerformanceSummary() {
     const monthEnd = format(endOfMonth(now), "yyyy-MM-dd")
 
     Promise.all([
-      supabase.from("telemarketers").select("id, full_name").eq("is_active", true).order("full_name"),
-      supabase.from("leads").select("assigned_to, funnel_stage, rag_status"),
-      supabase
-        .from("call_logs")
-        .select("telemarketer_id")
-        .gte("called_at", monthStart)
-        .lte("called_at", monthEnd + "T23:59:59"),
+      (() => {
+        let q = supabase.from("telemarketers").select("id, full_name").eq("is_active", true)
+        if (departmentFilter) q = q.eq("department_id", departmentFilter)
+        return q.order("full_name")
+      })(),
+      (() => {
+        let q = supabase.from("leads").select("assigned_to, funnel_stage, rag_status")
+        if (departmentFilter) q = q.eq("department_id", departmentFilter)
+        return q
+      })(),
+      (() => {
+        let q = supabase
+          .from("call_logs")
+          .select("telemarketer_id")
+          .gte("called_at", monthStart)
+          .lte("called_at", monthEnd + "T23:59:59")
+        if (departmentFilter) q = q.eq("department_id", departmentFilter)
+        return q
+      })(),
     ]).then(([tmResult, leadsResult, callsResult]) => {
       const telemarketers = (tmResult.data ?? []) as { id: string; full_name: string }[]
       const leads = (leadsResult.data ?? []) as { assigned_to: string | null; funnel_stage: string; rag_status: string }[]
@@ -60,19 +75,33 @@ export function PerformanceSummary() {
       setStats(result)
       setLoading(false)
     })
-  }, [])
+  }, [departmentFilter])
 
   const month = format(new Date(), "MMMM yyyy")
 
   return (
     <div className="space-y-3">
-      <p className="text-xs text-slate-400">Calls counted for {month}. Won = stages won through renewed.</p>
+      <div className="flex flex-wrap items-center gap-2">
+        <select
+          value={departmentFilter}
+          onChange={(e) => setDepartmentFilter(e.target.value)}
+          className="h-9 rounded-md border border-input bg-background px-3 text-sm text-slate-700"
+        >
+          <option value="">All departments</option>
+          {departments.map((d) => (
+            <option key={d.id} value={d.id}>{d.name}</option>
+          ))}
+        </select>
+        <p className="text-xs text-slate-400">
+          Calls counted for {month}. Won = stages won through renewed.
+        </p>
+      </div>
       <div className="rounded-xl border border-slate-200 overflow-hidden bg-white">
         <Table>
           <TableHeader>
             <TableRow className="bg-slate-50 hover:bg-slate-50">
               {[
-                "Telemarketer",
+                "Sales Rep",
                 "Total Leads",
                 `Calls (${format(new Date(), "MMM")})`,
                 "Won",

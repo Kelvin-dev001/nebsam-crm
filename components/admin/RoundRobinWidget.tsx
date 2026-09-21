@@ -8,7 +8,6 @@ import { createClient } from "@/lib/supabase/client"
 import { Telemarketer } from "@/types/crm"
 import { toast } from "sonner"
 
-const SUZZIE_ID = "33333333-3333-3333-3333-333333333333"
 
 interface TelemarketerStat {
   telemarketer: Telemarketer
@@ -27,17 +26,45 @@ export function RoundRobinWidget() {
   const [data, setData] = useState<RoundRobinData | null>(null)
   const [loading, setLoading] = useState(true)
   const [resetting, setResetting] = useState(false)
+  const [rrDeptId, setRrDeptId] = useState<string | null>(null)
+  const [orderedReps, setOrderedReps] = useState<Telemarketer[]>([])
 
   const load = useCallback(async () => {
     const supabase = createClient()
     const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0)
 
+    // Round robin applies only to the department whose leads arrive from the
+    // WhatsApp chatbot. The manual departments assign to whoever created the
+    // lead, so rotating them would be meaningless — and round_robin_state now
+    // has a row PER DEPARTMENT, so an unscoped .limit(1) would pick one at
+    // random and show the wrong rep as "next up".
+    const { data: rrDept } = await supabase
+      .from("departments")
+      .select("id")
+      .eq("assignment_mode", "round_robin")
+      .order("sort_order")
+      .limit(1)
+      .maybeSingle()
+
+    const deptId = (rrDept as { id: string } | null)?.id ?? null
+    setRrDeptId(deptId)
+    const rrDeptId = deptId
+
     const [telemarketersRes, rrStateRes] = await Promise.all([
-      supabase.from("telemarketers").select("*").eq("is_active", true).order("created_at"),
-      supabase.from("round_robin_state").select("*").limit(1).maybeSingle(),
+      (() => {
+        let q = supabase.from("telemarketers").select("*").eq("is_active", true)
+        if (rrDeptId) q = q.eq("department_id", rrDeptId)
+        return q.order("created_at")
+      })(),
+      (() => {
+        let q = supabase.from("round_robin_state").select("*")
+        if (rrDeptId) q = q.eq("department_id", rrDeptId)
+        return q.limit(1).maybeSingle()
+      })(),
     ])
 
     const telemarketers: Telemarketer[] = telemarketersRes.data ?? []
+    setOrderedReps(telemarketers)
     const lastAssigned = rrStateRes.data?.last_assigned_telemarketer_id ?? null
 
     // Determine next in cycle
@@ -81,18 +108,34 @@ export function RoundRobinWidget() {
   useEffect(() => { load() }, [load])
 
   async function handleReset() {
-    if (!confirm("Reset round robin order? The next lead will be assigned to Edith.")) return
+    // "Next lead goes to the first rep" means marking the LAST rep in the
+    // rotation as most recently assigned. Derived from the live rep list rather
+    // than a hardcoded seed UUID, which would be wrong in any database that was
+    // not built from seed.sql.
+    const first = orderedReps[0]
+    const last = orderedReps[orderedReps.length - 1]
+    if (!first || !last) {
+      toast.error("No active reps in the round-robin department")
+      return
+    }
+    if (!confirm(`Reset round robin order? The next lead will be assigned to ${first.full_name}.`)) return
+
     setResetting(true)
     const supabase = createClient()
-    const { error } = await supabase
+
+    // Scoped to this department's row. The previous version updated EVERY row
+    // in round_robin_state, which with per-department rows would stamp the
+    // other departments with a rep who does not belong to them.
+    let q = supabase
       .from("round_robin_state")
-      .update({ last_assigned_telemarketer_id: SUZZIE_ID })
-      .not("id", "is", null)
+      .update({ last_assigned_telemarketer_id: last.id })
+    q = rrDeptId ? q.eq("department_id", rrDeptId) : q.not("id", "is", null)
+    const { error } = await q
 
     if (error) {
       toast.error("Reset failed: " + error.message)
     } else {
-      toast.success("Round robin reset — next lead goes to Edith")
+      toast.success(`Round robin reset — next lead goes to ${first.full_name}`)
       await load()
     }
     setResetting(false)

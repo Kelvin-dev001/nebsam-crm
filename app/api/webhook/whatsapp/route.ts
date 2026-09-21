@@ -102,8 +102,25 @@ export async function POST(request: NextRequest) {
 
   const phoneNumber = normalizePhone(rawPhone)
 
-  // Single atomic RPC call: check existing / assign round robin / record event
-  const { data, error } = await supabase.rpc("assign_lead_round_robin", {
+  // Single atomic RPC call: check existing / assign round robin / record event.
+  //
+  // v2, not v1. The difference that matters: v1 rotates over ALL active
+  // telemarketers and looks a lead up by phone number alone, so the moment an
+  // e-seal or fuel rep exists it would start handing telematics leads to them,
+  // and a number held by another department would collide. v2 is scoped by
+  // department throughout.
+  //
+  // The slug is hardcoded because this route IS the telematics chatbot — the
+  // BSP webhook only ever delivers telematics enquiries. The three manual
+  // departments have no inbound channel by design (decision: the chat panel
+  // stays hidden for them in v1). If a second department ever gets its own
+  // BSP number, give it its own route or derive the slug from the recipient,
+  // rather than guessing here.
+  //
+  // v1 is deliberately left in place and untouched: reverting is a one-word
+  // edit, and migration 010 is what finally repoints the cron.
+  const { data, error } = await supabase.rpc("assign_lead_round_robin_v2", {
+    p_department_slug: "telematics",
     p_phone: phoneNumber,
     p_name: name ?? null,
     p_message: message ?? null,

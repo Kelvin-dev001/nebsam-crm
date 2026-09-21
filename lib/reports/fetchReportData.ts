@@ -4,6 +4,9 @@ import { Telemarketer } from "@/types/crm"
 export interface TelemarketerReport {
   id: string
   name: string
+  /** The rep's department, so a report can be grouped and headed by it. */
+  departmentId: string | null
+  departmentName: string | null
   totalLeads: number
   callsOnDate: number
   ragRed: number
@@ -17,50 +20,82 @@ export interface TelemarketerReport {
 
 export async function fetchReportData(
   telemarketers: Telemarketer[],
-  date: string  // "yyyy-MM-dd"
+  date: string,  // "yyyy-MM-dd"
+  /**
+   * Restrict every figure to one department. Omit for a cross-department
+   * report; an admin viewing "All departments" wants the whole picture, a rep
+   * downloading their own wants only theirs.
+   */
+  departmentId?: string | null,
 ): Promise<TelemarketerReport[]> {
   const supabase = createClient()
+
+  // Department names, so each row can say where it belongs.
+  const { data: deptRows } = await supabase.from("departments").select("id, name")
+  const deptNames = new Map<string, string>(
+    ((deptRows ?? []) as Array<{ id: string; name: string }>).map((d) => [d.id, d.name]),
+  )
 
   const dateStart = new Date(date)
   dateStart.setHours(0, 0, 0, 0)
   const dateEnd = new Date(date)
   dateEnd.setHours(23, 59, 59, 999)
 
+  /**
+   * Apply the department predicate when one was asked for.
+   *
+   * A rep belongs to one department, so for a single-rep report this changes
+   * nothing. It matters for an admin report that must not mix departments'
+   * numbers into one win rate.
+   */
+  const scope = <T extends { eq: (col: string, val: string) => T }>(q: T): T =>
+    departmentId ? q.eq("department_id", departmentId) : q
+
   const results = await Promise.all(
     telemarketers.map(async (t) => {
       const [leadsRes, callsRes, ragRes, winsRes, allWinsRes] = await Promise.all([
         // Total leads assigned (all time)
-        supabase
-          .from("leads")
-          .select("*", { count: "exact", head: true })
-          .eq("assigned_to", t.id),
+        scope(
+          supabase
+            .from("leads")
+            .select("*", { count: "exact", head: true })
+            .eq("assigned_to", t.id),
+        ),
 
         // Calls made on date
-        supabase
-          .from("call_logs")
-          .select("*", { count: "exact", head: true })
-          .eq("telemarketer_id", t.id)
-          .gte("called_at", dateStart.toISOString())
-          .lte("called_at", dateEnd.toISOString()),
+        scope(
+          supabase
+            .from("call_logs")
+            .select("*", { count: "exact", head: true })
+            .eq("telemarketer_id", t.id)
+            .gte("called_at", dateStart.toISOString())
+            .lte("called_at", dateEnd.toISOString()),
+        ),
 
         // RAG breakdown (full rows needed for grouping)
-        supabase
-          .from("leads")
-          .select("rag_status")
-          .eq("assigned_to", t.id),
+        scope(
+          supabase
+            .from("leads")
+            .select("rag_status")
+            .eq("assigned_to", t.id),
+        ),
 
         // Wins on date (by sale_date)
-        supabase
-          .from("sales")
-          .select("*", { count: "exact", head: true })
-          .eq("telemarketer_id", t.id)
-          .eq("sale_date", date),
+        scope(
+          supabase
+            .from("sales")
+            .select("*", { count: "exact", head: true })
+            .eq("telemarketer_id", t.id)
+            .eq("sale_date", date),
+        ),
 
         // All-time wins (for win rate)
-        supabase
-          .from("sales")
-          .select("*", { count: "exact", head: true })
-          .eq("telemarketer_id", t.id),
+        scope(
+          supabase
+            .from("sales")
+            .select("*", { count: "exact", head: true })
+            .eq("telemarketer_id", t.id),
+        ),
       ])
 
       const totalLeads = leadsRes.count ?? 0
@@ -78,6 +113,8 @@ export async function fetchReportData(
 
       return {
         id: t.id,
+        departmentId: t.department_id ?? null,
+        departmentName: t.department_id ? deptNames.get(t.department_id) ?? null : null,
         name: t.full_name,
         totalLeads,
         callsOnDate,

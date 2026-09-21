@@ -1,37 +1,41 @@
-import { FunnelStage, FUNNEL_STAGE_LABELS } from "@/types/crm"
-import { cn } from "@/lib/utils"
+"use client"
 
-const STAGE_CLASSES: Record<FunnelStage, string> = {
-  new:          "bg-slate-100 text-slate-600 border-slate-200",
-  contacted:    "bg-blue-100 text-blue-700 border-blue-200",
-  interested:   "bg-cyan-100 text-cyan-700 border-cyan-200",
-  quote_sent:   "bg-violet-100 text-violet-700 border-violet-200",
-  negotiating:  "bg-amber-100 text-amber-700 border-amber-200",
-  won:          "bg-green-100 text-green-700 border-green-200",
-  installed:    "bg-green-200 text-green-800 border-green-300",
-  post_sale:    "bg-teal-100 text-teal-700 border-teal-200",
-  sorted:       "bg-purple-100 text-purple-700 border-purple-200",
-  renewal_due:  "bg-orange-100 text-orange-700 border-orange-200",
-  renewed:      "bg-emerald-100 text-emerald-700 border-emerald-200",
-  lost:         "bg-red-100 text-red-700 border-red-200",
-  unqualified:  "bg-slate-100 text-slate-400 border-slate-200",
-}
+import { cn } from "@/lib/utils"
+import type { StageKey } from "@/types/crm"
+import { useStagesFor } from "@/lib/departments/useDepartment"
+import { stageBadgeClasses, stageLabel } from "@/lib/utils/funnelHelpers"
+
+/**
+ * Funnel stage badge, per department.
+ *
+ * Label and colour come from the `funnel_stages` config for the lead's
+ * department, falling back to the original telematics map when no department is
+ * given or the config has not loaded — so an existing telematics call site that
+ * passes only `stage` renders exactly as it always has.
+ *
+ * An unknown key renders title-cased ("Board Review") rather than as raw
+ * snake_case or an empty badge.
+ */
 
 interface Props {
-  stage: FunnelStage
+  stage: StageKey
+  /** The lead's department. Omit for the legacy telematics-only behaviour. */
+  departmentId?: string | null
   className?: string
 }
 
-export function FunnelStageBadge({ stage, className }: Props) {
+export function FunnelStageBadge({ stage, departmentId, className }: Props) {
+  const stages = useStagesFor(departmentId)
+
   return (
     <span
       className={cn(
         "inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium whitespace-nowrap",
-        STAGE_CLASSES[stage] ?? "bg-slate-100 text-slate-600 border-slate-200",
-        className
+        stageBadgeClasses(stage, stages),
+        className,
       )}
     >
-      {FUNNEL_STAGE_LABELS[stage] ?? stage}
+      {stageLabel(stage, stages)}
     </span>
   )
 }

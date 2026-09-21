@@ -5,6 +5,8 @@ import Link from "next/link"
 import { Phone, MessageCircle, Eye, Inbox, Users, RefreshCcw, Loader2, Flame, ChevronLeft, ChevronRight } from "lucide-react"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { useTelemarketerStore } from "@/lib/stores/telemarketerStore"
+import { useDepartment } from "@/lib/departments/useDepartment"
+import { orderedStages } from "@/lib/utils/funnelHelpers"
 import { createClient } from "@/lib/supabase/client"
 import { CallLogModal, type CallSavedPayload } from "@/components/leads/CallLogModal"
 import { ChatModal } from "@/components/chat/ChatModal"
@@ -40,6 +42,7 @@ const PAGE_SIZE = 20
 
 export function BacklogShell() {
   const { activeTelemarketer } = useTelemarketerStore()
+  const { department, stages } = useDepartment()
   const [data, setData] = useState<BacklogLead[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -53,11 +56,20 @@ export function BacklogShell() {
     if (isRefresh) setRefreshing(true)
     else setLoading(true)
     try {
-      const { data: raw, error } = await supabase
+      // The backlog is "never called, still at the first stage". The first
+      // stage is per-department config, not necessarily the literal 'new' —
+      // reading it from config keeps the backlog correct if a department's
+      // funnel is ever reordered in Admin.
+      const firstStage = orderedStages(stages)[0]?.key ?? "new"
+
+      let q = supabase
         .from("leads")
         .select("id, phone_number, full_name, product_interested, funnel_stage, rag_status, location, vehicle_type, whatsapp_message, created_at, call_logs(id)")
         .eq("assigned_to", activeTelemarketer.id)
-        .eq("funnel_stage", "new")
+        .eq("funnel_stage", firstStage)
+      if (department?.id) q = q.eq("department_id", department.id)
+
+      const { data: raw, error } = await q
         .order("created_at", { ascending: true }) // oldest first
       if (error) { console.error("BacklogShell fetch error:", error); return }
 

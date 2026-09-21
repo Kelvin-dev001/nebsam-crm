@@ -6,7 +6,7 @@ import { StatsCards } from "./StatsCards"
 import { FollowUpToday } from "./FollowUpToday"
 import { RAGSummary } from "./RAGSummary"
 import { RecentActivity } from "./RecentActivity"
-import { UpcomingRenewals } from "./UpcomingRenewals"
+import { UpcomingCommitments } from "./UpcomingCommitments"
 import { Users, FileDown, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { fetchReportData } from "@/lib/reports/fetchReportData"
@@ -83,7 +83,9 @@ export function DashboardShell() {
           <h1 className="text-2xl font-bold text-slate-900">
             {getGreeting()}, {activeTelemarketer.full_name}
           </h1>
-          <p className="text-slate-500 text-sm mt-0.5">Here&apos;s what&apos;s happening today.</p>
+          <p className="text-slate-500 text-sm mt-0.5">
+            Here&apos;s what&apos;s happening today.
+          </p>
         </div>
         <DownloadReportButton telemarketer={activeTelemarketer} />
       </div>
@@ -104,7 +106,7 @@ export function DashboardShell() {
       {/* Recent activity + Upcoming renewals */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <RecentActivity telemarketer={activeTelemarketer} />
-        <UpcomingRenewals telemarketer={activeTelemarketer} />
+        <UpcomingCommitments telemarketer={activeTelemarketer} />
       </div>
     </div>
   )

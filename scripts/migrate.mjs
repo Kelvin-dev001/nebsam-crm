@@ -1,4 +1,19 @@
 /**
+ * !! SUPERSEDED - DO NOT RUN THIS AGAINST PRODUCTION. !!
+ *
+ * Use scripts/migrate-file.mjs instead. It takes an explicit file path, prints the
+ * target host and project ref before connecting, and refuses a real apply without
+ * --confirm=<project-ref>.
+ *
+ * This file is kept for historical reference only. Two reasons never to run it:
+ *
+ *   1. It is hardcoded to 001_initial_schema.sql (see below), whose CREATE TABLE
+ *      statements have no IF NOT EXISTS. Against the live database it aborts on the
+ *      first statement - harmless but useless - and it will never apply 009 or later.
+ *   2. --seed executes supabase/seed.sql, which inserts demo telemarketers and 20
+ *      sample leads. That would pollute live data. seed.sql is a fixture for fresh
+ *      dev databases only: do not edit it, do not extend it, do not run it.
+ *
  * Sprint 1 migration runner.
  * Usage: node scripts/migrate.mjs [--seed]
  *

@@ -2,27 +2,36 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { LayoutDashboard, Users, RefreshCcw, Settings, Inbox } from "lucide-react"
+import { Settings } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { SignOutButton } from "./SignOutButton"
-
-const navItems = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/leads", label: "My Leads", icon: Users },
-  { href: "/backlog", label: "Backlog", icon: Inbox },
-  { href: "/renewals", label: "Renewals", icon: RefreshCcw },
-]
+import { useDepartment } from "@/lib/departments/useDepartment"
+import { navItemsFor } from "@/lib/departments/navItems"
 
 const adminItem = { href: "/admin", label: "Admin", icon: Settings }
 
 export function Sidebar() {
   const pathname = usePathname()
+  const { department } = useDepartment()
+  // Nav follows the department's post-sale model, so an e-seal rep gets
+  // Reorders where telematics gets Renewals.
+  const navItems = navItemsFor(department?.post_sale_model)
 
   return (
     <aside className="hidden lg:flex fixed inset-y-0 left-0 z-50 w-60 flex-col" style={{ backgroundColor: "#0F1729" }}>
       {/* Logo */}
       <div className="flex h-16 items-center px-6 border-b border-white/10">
-        <span className="text-white font-bold text-lg tracking-tight">Nebsam CRM</span>
+        <div className="flex flex-col">
+          <span className="text-white font-bold text-lg tracking-tight leading-tight">Nebsam CRM</span>
+          {department && (
+            <span
+              className="text-[11px] font-medium leading-tight"
+              style={{ color: department.accent_color }}
+            >
+              {department.name}
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Nav */}

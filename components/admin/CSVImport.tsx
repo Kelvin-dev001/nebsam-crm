@@ -1,13 +1,15 @@
 "use client"
 
-import { useRef, useState } from "react"
+import { useMemo, useRef, useState } from "react"
 import { Upload, FileText, X, AlertCircle, CheckCircle2, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { createClient } from "@/lib/supabase/client"
-import { PRODUCTS, type Product } from "@/types/crm"
-import type { Database } from "@/lib/supabase/types"
-type LeadInsert = Database["public"]["Tables"]["leads"]["Insert"]
+import { useDepartment } from "@/lib/departments/useDepartment"
+import { useDepartmentStore } from "@/lib/stores/departmentStore"
+import { useTelemarketerStore } from "@/lib/stores/telemarketerStore"
+import { normalizePhone, isValidPhone } from "@/lib/utils/phoneHelpers"
+import type { KycFieldDef } from "@/types/crm"
 import { cn } from "@/lib/utils"
 
 // ── CSV parser ─────────────────────────────────────────────────────────────────
@@ -41,19 +43,45 @@ function parseCSV(text: string): { headers: string[]; rows: string[][] } {
 
 // ── CRM field options ──────────────────────────────────────────────────────────
 
-const CRM_FIELDS = [
+const CORE_FIELDS = [
   { value: "_ignore", label: "— Ignore column —" },
   { value: "phone_number", label: "Phone Number *" },
-  { value: "full_name", label: "Full Name" },
+  { value: "full_name", label: "Contact Name" },
+  { value: "company_name", label: "Company / School Name" },
   { value: "location", label: "Location" },
-  { value: "vehicle_type", label: "Vehicle Type" },
   { value: "product_interested", label: "Product" },
-  { value: "campaign_name", label: "Campaign Name" },
 ]
 
-function autoMap(header: string): string {
+/**
+ * Columns a CSV can map onto: the core lead fields plus whatever KYC questions
+ * the chosen department actually asks. That is the point of routing the import
+ * through the same config the forms use — an e-seal CSV can carry Fleet Size
+ * and Routes Served without a code change.
+ */
+function fieldsFor(kycFields: KycFieldDef[]) {
+  const coreKeys = new Set(CORE_FIELDS.map((f) => f.value))
+  const kyc = kycFields
+    .filter((f) => f.is_active && !coreKeys.has(f.key))
+    .map((f) => ({ value: `kyc:${f.key}`, label: `${f.label} (KYC)` }))
+  return [...CORE_FIELDS, ...kyc]
+}
+
+function autoMap(header: string, kycFields: KycFieldDef[] = []): string {
+  // Try the department's own KYC questions first — a column called "Fleet Size"
+  // should land on the fleet_size question, not be ignored.
+  const norm = (v: string) => v.toLowerCase().replace(/[\s_-]/g, "")
+  const hNorm = norm(header)
+  for (const f of kycFields) {
+    if (!f.is_active) continue
+    if (norm(f.label) === hNorm || norm(f.key) === hNorm) return `kyc:${f.key}`
+  }
+  return autoMapCore(header)
+}
+
+function autoMapCore(header: string): string {
   const h = header.toLowerCase().replace(/[\s_-]/g, "")
   if (h.includes("phone") || h.includes("mobile") || h.includes("number") || h === "msisdn") return "phone_number"
+  if (h.includes("company") || h.includes("school") || h.includes("organisation") || h.includes("organization")) return "company_name"
   if (h.includes("name") && !h.includes("campaign")) return "full_name"
   if (h.includes("location") || h.includes("city") || h.includes("area")) return "location"
   if (h.includes("vehicle") || h.includes("car")) return "vehicle_type"
@@ -67,6 +95,9 @@ function autoMap(header: string): string {
 interface ImportResult {
   imported: number
   skipped: number
+  duplicates: number
+  /** Rows rejected only because the pre-010 global phone constraint still exists. */
+  crossDepartmentBlocked: number
   errors: string[]
 }
 
@@ -79,6 +110,21 @@ export function CSVImport() {
   const [mapping, setMapping] = useState<Record<string, string>>({})
   const [importing, setImporting] = useState(false)
   const [result, setResult] = useState<ImportResult | null>(null)
+
+  // A CSV belongs to exactly one department: it decides the funnel the leads
+  // enter, which KYC questions the columns can map onto, and who they are
+  // assigned to.
+  const { departments } = useDepartment()
+  const configs = useDepartmentStore((s) => s.configs)
+  const { activeTelemarketer } = useTelemarketerStore()
+  const [departmentId, setDepartmentId] = useState<string>("")
+
+  const kycFields = useMemo(
+    () => (departmentId ? configs[departmentId]?.kycFields ?? [] : []),
+    [configs, departmentId],
+  )
+  const fieldOptions = useMemo(() => fieldsFor(kycFields), [kycFields])
+  const selectedDepartment = departments.find((d) => d.id === departmentId) ?? null
 
   function processFile(file: File) {
     if (!file.name.endsWith(".csv")) {
@@ -98,7 +144,7 @@ export function CSVImport() {
       setFileName(file.name)
       setResult(null)
       const autoMapped: Record<string, string> = {}
-      h.forEach((header) => { autoMapped[header] = autoMap(header) })
+      h.forEach((header) => { autoMapped[header] = autoMap(header, kycFields) })
       setMapping(autoMapped)
     }
     reader.readAsText(file)
@@ -125,76 +171,121 @@ export function CSVImport() {
     setResult(null)
   }
 
+  /**
+   * Import row by row through `create_manual_lead` rather than a bulk insert.
+   *
+   * Slower, and deliberately so: the RPC applies the department's assignment
+   * mode, resolves its first funnel stage, normalises the phone and writes the
+   * KYC blob alongside the promoted columns — none of which a raw insert does.
+   * It also means one bad row costs one row, where the old batched insert threw
+   * away fifty at a time and reported a single opaque error.
+   */
   async function runImport() {
     const phoneField = Object.entries(mapping).find(([, v]) => v === "phone_number")?.[0]
     if (!phoneField) {
       toast.error("You must map a column to Phone Number")
       return
     }
+    if (!departmentId || !selectedDepartment) {
+      toast.error("Choose a department first")
+      return
+    }
 
     setImporting(true)
     const supabase = createClient()
-    const leads: LeadInsert[] = []
-    const skippedReasons: string[] = []
 
-    rows.forEach((row, idx) => {
-      const lead: LeadInsert = { phone_number: "", lead_source: "manual" }
+    let imported = 0
+    let duplicates = 0
+    let crossDepartmentBlocked = 0
+    let skipped = 0
+    const errors: string[] = []
+
+    for (let idx = 0; idx < rows.length; idx++) {
+      const row = rows[idx]
+      const rowNo = idx + 2 // 1-based, plus the header line
+      const core: Record<string, string> = {}
+      const kyc: Record<string, unknown> = {}
+
       headers.forEach((header, colIdx) => {
         const field = mapping[header]
-        if (field && field !== "_ignore") {
-          const val = row[colIdx]?.trim()
-          if (val) (lead as Record<string, string>)[field] = val
+        if (!field || field === "_ignore") return
+        const val = row[colIdx]?.trim()
+        if (!val) return
+        if (field.startsWith("kyc:")) {
+          const key = field.slice(4)
+          const def = kycFields.find((f) => f.key === key)
+          if (def?.field_type === "multiselect") {
+            kyc[key] = val.split(/[;,|]/).map((v) => v.trim()).filter(Boolean)
+          } else if (def?.field_type === "number") {
+            const n = Number(val.replace(/[^0-9.-]/g, ""))
+            if (!Number.isNaN(n)) kyc[key] = n
+          } else if (def?.field_type === "boolean") {
+            kyc[key] = /^(y|yes|true|1)$/i.test(val)
+          } else {
+            kyc[key] = val
+          }
+        } else {
+          core[field] = val
         }
       })
 
-      if (!lead.phone_number) {
-        skippedReasons.push(`Row ${idx + 2}: missing phone number`)
-        return
+      const phone = normalizePhone(core.phone_number ?? "")
+      if (!phone || !isValidPhone(phone)) {
+        skipped++
+        if (errors.length < 50) {
+          errors.push(`Row ${rowNo}: ${core.phone_number ? `"${core.phone_number}" is not a valid phone number` : "missing phone number"}`)
+        }
+        continue
       }
 
-      // Normalize phone: if starts with 07 or 01, prefix +254
-      if (/^0[0-9]{9}$/.test(lead.phone_number)) {
-        lead.phone_number = "+254" + lead.phone_number.slice(1)
+      const { error } = await supabase.rpc("create_manual_lead", {
+        p_department_slug: selectedDepartment.slug,
+        p_phone: phone,
+        p_company: core.company_name ?? null,
+        p_contact_name: core.full_name ?? null,
+        p_kyc: kyc as never,
+        p_product: core.product_interested ?? null,
+        p_source: "manual",
+        p_created_by: activeTelemarketer?.id ?? null,
+        p_location: core.location ?? null,
+      })
+
+      if (!error) {
+        imported++
+        continue
       }
 
-      // Validate product if provided
-      if (lead.product_interested && !PRODUCTS.includes(lead.product_interested as Product)) {
-        lead.product_interested = null
-      }
-
-      leads.push(lead)
-    })
-
-    let importedCount = 0
-    const errorMsgs: string[] = [...skippedReasons]
-
-    // Insert in batches of 50
-    const BATCH = 50
-    for (let i = 0; i < leads.length; i += BATCH) {
-      const batch = leads.slice(i, i + BATCH)
-      const { error, data } = await supabase.from("leads")
-        .insert(batch)
-        .select("id")
-      if (error) {
-        errorMsgs.push(`Batch ${Math.floor(i / BATCH) + 1}: ${error.message}`)
+      // Tell the two kinds of "duplicate" apart. They mean different things and
+      // one of them is temporary.
+      if (error.message.includes("already exists in department")) {
+        duplicates++
+        if (errors.length < 50) errors.push(`Row ${rowNo}: ${phone} is already in ${selectedDepartment.name}`)
+      } else if (error.message.includes("leads_phone_number_key")) {
+        // Pre-cutover only: the OLD global unique on leads(phone_number) is
+        // still in place, so a number held by another department cannot be
+        // entered here yet. Migration 010 drops it and these rows will import.
+        crossDepartmentBlocked++
+        if (errors.length < 50) {
+          errors.push(`Row ${rowNo}: ${phone} exists in another department — blocked until migration 010 drops the global phone constraint`)
+        }
       } else {
-        importedCount += (data?.length ?? batch.length)
+        skipped++
+        if (errors.length < 50) errors.push(`Row ${rowNo}: ${error.message}`)
       }
     }
 
-    setResult({
-      imported: importedCount,
-      skipped: skippedReasons.length,
-      errors: errorMsgs.filter((m) => !skippedReasons.includes(m)),
-    })
+    setResult({ imported, skipped, duplicates, crossDepartmentBlocked, errors })
 
-    if (importedCount > 0) {
-      toast.success(`${importedCount} lead${importedCount !== 1 ? "s" : ""} imported`)
+    if (imported > 0) {
+      toast.success(`${imported} lead${imported !== 1 ? "s" : ""} imported into ${selectedDepartment.name}`)
+    } else {
+      toast.warning("No rows were imported — see the report below")
     }
     setImporting(false)
   }
 
   const mappedPhoneColumn = Object.values(mapping).includes("phone_number")
+  const canImport = mappedPhoneColumn && !!departmentId
   const previewRows = rows.slice(0, 5)
 
   return (
@@ -269,7 +360,7 @@ export function CSVImport() {
                               : "border-green-200 text-green-700 bg-green-50"
                         )}
                       >
-                        {CRM_FIELDS.map((f) => (
+                        {fieldOptions.map((f) => (
                           <option key={f.value} value={f.value}>{f.label}</option>
                         ))}
                       </select>
@@ -279,6 +370,42 @@ export function CSVImport() {
               </tbody>
             </table>
           </div>
+
+          {/* Department comes first: it decides the funnel, the KYC columns
+              available for mapping, and who the leads are assigned to. */}
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-slate-600">
+              Import into department <span className="text-red-500">*</span>
+            </label>
+            <select
+              value={departmentId}
+              onChange={(e) => {
+                setDepartmentId(e.target.value)
+                // Re-run auto-mapping against the new department's questions.
+                const next: Record<string, string> = {}
+                const cfg = configs[e.target.value]?.kycFields ?? []
+                headers.forEach((h) => { next[h] = autoMap(h, cfg) })
+                setMapping(next)
+              }}
+              className="h-9 w-full sm:w-72 rounded-md border border-input bg-background px-3 text-sm"
+            >
+              <option value="">Select a department…</option>
+              {departments.filter((d) => d.is_active).map((d) => (
+                <option key={d.id} value={d.id}>{d.name}</option>
+              ))}
+            </select>
+            {departmentId && (
+              <p className="text-[11px] text-slate-500">
+                Leads enter this department&apos;s first funnel stage and are assigned by its{" "}
+                <span className="font-medium">{selectedDepartment?.assignment_mode}</span> rule.
+                {kycFields.length > 0 && ` ${kycFields.filter((f) => f.is_active).length} KYC question(s) available for mapping.`}
+              </p>
+            )}
+          </div>
+
+          {!departmentId && (
+            <p className="text-xs text-amber-600">Choose a department before mapping columns.</p>
+          )}
 
           {!mappedPhoneColumn && (
             <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-700">
@@ -327,7 +454,7 @@ export function CSVImport() {
         <div className="space-y-3">
           <Button
             className="gap-2"
-            disabled={!mappedPhoneColumn || importing}
+            disabled={!canImport || importing}
             onClick={runImport}
           >
             {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
@@ -345,8 +472,22 @@ export function CSVImport() {
                   {result.imported} lead{result.imported !== 1 ? "s" : ""} imported successfully
                 </p>
               </div>
+              {result.duplicates > 0 && (
+                <p className="text-xs text-amber-700 pl-6">
+                  {result.duplicates} row{result.duplicates !== 1 ? "s" : ""} already in this department
+                </p>
+              )}
+              {result.crossDepartmentBlocked > 0 && (
+                <p className="text-xs text-amber-700 pl-6">
+                  {result.crossDepartmentBlocked} row{result.crossDepartmentBlocked !== 1 ? "s" : ""} held by
+                  another department — these will import once migration 010 drops the global phone
+                  constraint. They are not errors in your file.
+                </p>
+              )}
               {result.skipped > 0 && (
-                <p className="text-xs text-amber-600 pl-6">{result.skipped} row{result.skipped !== 1 ? "s" : ""} skipped (missing phone number)</p>
+                <p className="text-xs text-amber-600 pl-6">
+                  {result.skipped} row{result.skipped !== 1 ? "s" : ""} skipped (missing or invalid phone number)
+                </p>
               )}
               {result.errors.length > 0 && (
                 <div className="pl-6 space-y-1">

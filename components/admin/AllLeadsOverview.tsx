@@ -10,6 +10,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table"
 import { createClient } from "@/lib/supabase/client"
+import { useDepartmentStore } from "@/lib/stores/departmentStore"
 import { FunnelStageBadge } from "@/components/leads/FunnelStageBadge"
 import { RAGBadge } from "@/components/leads/RAGBadge"
 import { formatDate } from "@/lib/utils/dateHelpers"
@@ -35,22 +36,27 @@ export function AllLeadsOverview() {
   const [search, setSearch] = useState("")
   const [tmFilter, setTmFilter] = useState("")
   const [stageFilter, setStageFilter] = useState("")
+  const [departmentFilter, setDepartmentFilter] = useState("")
+  const departments = useDepartmentStore((st) => st.departments)
 
   useEffect(() => {
     const supabase = createClient()
     Promise.all([
-      supabase
-        .from("leads")
-        .select("id, phone_number, full_name, product_interested, funnel_stage, rag_status, created_at, telemarketer:telemarketers(full_name)")
-        .order("created_at", { ascending: false })
-        .limit(500),
+      (() => {
+        let q = supabase
+          .from("leads")
+          .select("id, phone_number, full_name, company_name, department_id, product_interested, funnel_stage, rag_status, created_at, telemarketer:telemarketers(full_name)")
+        // Admin sees everything by default; the filter narrows to one department.
+        if (departmentFilter) q = q.eq("department_id", departmentFilter)
+        return q.order("created_at", { ascending: false }).limit(500)
+      })(),
       supabase.from("telemarketers").select("id, full_name").eq("is_active", true).order("full_name"),
     ]).then(([leadsResult, tmResult]) => {
       setLeads((leadsResult.data as unknown as LeadRow[]) ?? [])
       setTelemarketers((tmResult.data as TelemarketerOption[]) ?? [])
       setLoading(false)
     })
-  }, [])
+  }, [departmentFilter])
 
   const filtered = leads.filter((l) => {
     const q = search.toLowerCase()
@@ -63,7 +69,7 @@ export function AllLeadsOverview() {
     return matchesSearch && matchesTm && matchesStage
   })
 
-  const hasFilters = search || tmFilter || stageFilter
+  const hasFilters = search || tmFilter || stageFilter || departmentFilter
 
   return (
     <div className="space-y-3">
@@ -78,6 +84,17 @@ export function AllLeadsOverview() {
             className="pl-8 h-9 text-sm w-52"
           />
         </div>
+        <select
+          value={departmentFilter}
+          onChange={(e) => setDepartmentFilter(e.target.value)}
+          className="h-9 rounded-md border border-input bg-background px-3 text-sm text-slate-700"
+        >
+          <option value="">All departments</option>
+          {departments.map((d) => (
+            <option key={d.id} value={d.id}>{d.name}</option>
+          ))}
+        </select>
+
         <select
           value={tmFilter}
           onChange={(e) => setTmFilter(e.target.value)}
