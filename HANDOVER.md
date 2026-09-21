@@ -21,7 +21,7 @@ Three new departments alongside the original telematics team, on **one shared `l
 
 **Migrations applied to production**, in order: `009` (additive) · `009b` (concurrent indexes) ·
 `seed_departments.sql` · `009e` (function grant lockdown) · `009c` (department functions) ·
-`009d` (admin functions) · `009e` again · `010` (cutover).
+`009d` (admin functions) · `009e` again · `010` (cutover) · `011` (department RLS).
 
 **App**: deployed to Vercel, serving `nebsam-crm.vercel.app`. New surfaces: manual prospect entry,
 `/reorders`, `/buses`, `/term-billing`, Admin → Departments.
