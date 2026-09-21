@@ -256,7 +256,8 @@ passing.
 - [x] **D4** — `NewProspectSheet`, `KycFields`, department-scoped `LeadsShell`, config-driven
       filters/badges/`CallLogModal`. Verified at the data layer on staging; the browser
       walkthrough still needs the staging anon key.
-- [ ] **D5** — Dashboard, backlog, renewals, reorders.
+- [x] **D5** — `UpcomingCommitments`, `/reorders` + `ReordersShell`, department-aware nav and
+      middleware route guard, department-scoped backlog and renewals.
 - [ ] **D5b** — School Bus: bus register + term billing.
 - [ ] **D6** — Admin: Departments tab, assignment, CSV, reports.
 - [ ] **D7** — Deploy the app, then run the 010 cutover.
