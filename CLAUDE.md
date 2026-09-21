@@ -48,8 +48,11 @@ the app is not yet deployed against them, so nothing reads the new columns yet).
 - Triggers `leads_updated_at`, `sales_renewal_due_date` (installation_date + 365d) — both enabled.
 - Live bodies are committed at `supabase/migrations/_pre009_function_snapshot.sql`.
 
-**RLS** is enabled on all tables but every policy is still `USING (true)`. The auth-scoped
-versions sit commented out in `006_auth.sql`.
+**RLS** is enabled on all tables with real department-aware policies (migration 011). admin sees
+everything; a rep sees their own rows within their own department; `anon` sees nothing. Child
+tables (school_buses, term_billings, webhook_events) inherit visibility from their parent lead,
+so lead visibility is defined in exactly one place. `service_role` and `postgres` bypass RLS,
+which is what keeps the webhook and the cron working.
 
 **There is an active event trigger, `ensure_rls`**, running `public.rls_auto_enable()` on
 `ddl_command_end` for `CREATE TABLE`. **Every new table in `public` gets RLS enabled
@@ -286,9 +289,8 @@ passing.
 - [x] **D6** — Departments tab (stage/KYC/product/term-calendar editors, rep assignment),
       CSV import with department + KYC mapping, reports grouped by department, admin filters.
 - [x] **D7** — App deployed to production 2026-09-21; migration 010 cutover applied and verified.
-- [ ] **D8** — RLS (`011`), after a soak. **The only remaining sprint.** Every policy is still
-      `USING (true)`; department isolation is enforced in the app, not the database. Do this
-      before the new reps start. See `HANDOVER.md`.
+- [x] **D8** — `011_department_rls.sql` applied to production 2026-09-21. 0 open policies remain;
+      department isolation is now enforced in the database, verified by role impersonation.
 
 Sprint detail, acceptance criteria and the verification checklist live in
 `DEPARTMENTS-MASTER-PROMPT.md` §9 and §10.

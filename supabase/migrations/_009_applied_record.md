@@ -189,3 +189,52 @@ The 05:00 UTC (08:00 EAT) cron run on 2026-09-22 is the **first on `rag_auto_fla
 its result against the previous morning's: v2 was proven on staging to produce byte-identical
 per-lead output to v1 across 3,393 leads, so the RAG distribution should not move beyond normal
 daily drift.
+
+---
+
+# 011 — production RLS record
+
+Applied to **production** on **2026-09-21, ~21:35 EAT**. Sprint D8, the final migration.
+
+22 policies now cover `public`; **0 open `USING (true)` policies remain.**
+
+## Sequencing that mattered
+
+The `DepartmentProvider` fix was **deployed before** this migration, deliberately. 011 makes the
+config tables `authenticated`-only, and the previous provider loaded them on `/login` as `anon`
+— which after 011 returns an *empty result rather than an error*, so the store would have been
+marked `loaded`, never retried after sign-in, and the app would have run with no config at all:
+no department name, no manual prospect entry, everything on hardcoded fallbacks.
+
+## Verified against a baseline captured minutes earlier
+
+| Role | Before 011 | After 011 |
+|---|---:|---:|
+| Edith | 1,143 | **1,143** |
+| Janet | 1,145 | **1,145** |
+| Suzzie | 1,143 | **1,143** |
+| admin | — | 3,431 (all) |
+| anon | — | **0** |
+| service_role | — | 3,431 (bypasses RLS) |
+
+Janet additionally still reads her own 149 call logs and all 60 config stages. Verified by
+impersonating each real `auth.users` id the way PostgREST does (`SET LOCAL ROLE authenticated`
+plus `request.jwt.claims`), not through the UI.
+
+Cron still `0 5 * * *` → `rag_auto_flag_v2()`. Checklist: **23/23**. App serving HTTP 200.
+
+## Two findings from building it
+
+1. **Policies must be scoped `TO authenticated`.** Without the `TO` clause a signed-out request
+   against `leads` evaluates the policy, calls `current_rep_department()`, and fails with
+   *permission denied for function* instead of returning no rows. anon now matches no policy at
+   all — the correct result and a far less alarming one.
+2. **Vacuous test passes are worse than skips.** After 011, checks that read through the anon key
+   "passed" only because the result set was empty. `departments-check.mjs` is now posture-aware
+   and reports those as SKIP rather than PASS.
+
+## Rollback
+
+The block at the foot of `011_department_rls.sql` restores the open policies. 011 changes **no
+data** — only policies — so the failure mode is invisibility, not loss, and the rollback needs no
+backup to work.
