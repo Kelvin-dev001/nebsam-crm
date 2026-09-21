@@ -1,5 +1,7 @@
 import { createServerClient } from "@supabase/ssr"
 import { NextResponse, type NextRequest } from "next/server"
+import { POST_SALE_ROUTES } from "@/lib/departments/navItems"
+import type { PostSaleModel } from "@/types/crm"
 
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request })
@@ -59,6 +61,42 @@ export async function middleware(request: NextRequest) {
   // Telemarketer: block /admin access
   if (role !== "admin" && path.startsWith("/admin")) {
     return NextResponse.redirect(new URL("/dashboard", request.url))
+  }
+
+  // ── Post-sale route guard ─────────────────────────────────────────────────
+  // A rep reaching a post-sale page their department does not have — /renewals
+  // for an e-seal rep, /buses for anyone but school bus — goes to /dashboard.
+  //
+  // Driven by the department's post_sale_model rather than a hardcoded slug
+  // list, so adding a fifth department needs no change here. Admins are global
+  // and are never redirected.
+  //
+  // This is a second line of defence, not the primary one: the nav never offers
+  // a rep a link they would be bounced from (lib/departments/navItems.ts). It
+  // exists for typed URLs and stale bookmarks.
+  const guardedRoute = Object.keys(POST_SALE_ROUTES).find(
+    (route) => path === route || path.startsWith(route + "/"),
+  )
+
+  if (guardedRoute && role !== "admin") {
+    const { data: rep } = await supabase
+      .from("telemarketers")
+      .select("departments(post_sale_model)")
+      .eq("user_id", user.id)
+      .eq("is_active", true)
+      .maybeSingle()
+
+    const model = (
+      rep as { departments?: { post_sale_model?: PostSaleModel } | null } | null
+    )?.departments?.post_sale_model
+
+    // Only redirect when the department is KNOWN and does not allow the route.
+    // If the lookup returns nothing — an unlinked rep, or a database that has
+    // not run migration 009 — fall through rather than locking someone out of
+    // a page they have always been able to use.
+    if (model && !POST_SALE_ROUTES[guardedRoute].includes(model)) {
+      return NextResponse.redirect(new URL("/dashboard", request.url))
+    }
   }
 
   return response

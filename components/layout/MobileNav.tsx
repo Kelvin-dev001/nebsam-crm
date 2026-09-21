@@ -2,19 +2,18 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { LayoutDashboard, Users, RefreshCcw, Settings, Inbox } from "lucide-react"
+import { Settings } from "lucide-react"
 import { cn } from "@/lib/utils"
-
-const navItems = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/leads",     label: "My Leads",  icon: Users },
-  { href: "/backlog",   label: "Backlog",   icon: Inbox },
-  { href: "/renewals",  label: "Renewals",  icon: RefreshCcw },
-  { href: "/admin",     label: "Admin",     icon: Settings },
-]
+import { useDepartment } from "@/lib/departments/useDepartment"
+import { navItemsFor } from "@/lib/departments/navItems"
 
 export function MobileNav() {
   const pathname = usePathname()
+  const { department } = useDepartment()
+  const navItems = [
+    ...navItemsFor(department?.post_sale_model),
+    { href: "/admin", label: "Admin", icon: Settings },
+  ]
 
   return (
     <nav className="fixed bottom-0 inset-x-0 z-50 flex lg:hidden border-t border-slate-200 bg-white">

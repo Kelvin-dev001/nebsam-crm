@@ -17,6 +17,7 @@ import { CheckCircle2, XCircle } from "lucide-react"
 import { toast } from "sonner"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { createClient } from "@/lib/supabase/client"
+import { useDepartment } from "@/lib/departments/useDepartment"
 import { daysUntil, getRenewalColorClass, formatDate } from "@/lib/utils/dateHelpers"
 import { format } from "date-fns"
 import { cn } from "@/lib/utils"
@@ -36,6 +37,9 @@ export interface RenewalRow {
   sale_date: string
   installation_date: string | null
   renewal_due_date: string | null
+  /** Subscription departments (fuel) run to a contract end date rather than a
+   *  365-day renewal. Null for telematics. */
+  contract_end: string | null
   telemarketer_id: string
   lead: {
     id: string
@@ -68,6 +72,7 @@ function deriveStatus(funnelStage: string): RenewalStatus {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function RenewalsShell() {
+  const { department } = useDepartment()
   const [data, setData] = useState<RenewalRow[]>([])
   const [loading, setLoading] = useState(true)
   const [telemarketers, setTelemarketers] = useState<TelemarketerOption[]>([])
@@ -82,16 +87,26 @@ export function RenewalsShell() {
     const supabase = createClient()
 
     Promise.all([
-      supabase
-        .from("sales")
-        .select(`
-          id, lead_id, product, sale_amount, currency,
-          sale_date, installation_date, renewal_due_date, telemarketer_id,
-          lead:leads(id, full_name, phone_number, funnel_stage, rag_status),
-          telemarketer:telemarketers(id, full_name)
-        `)
-        .not("renewal_due_date", "is", null)
-        .order("renewal_due_date", { ascending: true }),
+      (() => {
+        let q = supabase
+          .from("sales")
+          .select(`
+            id, lead_id, product, sale_amount, currency,
+            sale_date, installation_date, renewal_due_date, contract_end, telemarketer_id,
+            lead:leads(id, full_name, phone_number, funnel_stage, rag_status),
+            telemarketer:telemarketers(id, full_name)
+          `)
+        // A subscription department's sales have contract_end and a NULL
+        // renewal_due_date, so the renewal-only filter would hide every one of
+        // them. Apply it only where renewals are the post-sale model.
+        if (department?.post_sale_model === "subscription") {
+          q = q.or("renewal_due_date.not.is.null,contract_end.not.is.null")
+        } else {
+          q = q.not("renewal_due_date", "is", null)
+        }
+        if (department?.id) q = q.eq("department_id", department.id)
+        return q.order("renewal_due_date", { ascending: true })
+      })(),
       supabase
         .from("telemarketers")
         .select("id, full_name")
@@ -99,8 +114,11 @@ export function RenewalsShell() {
         .order("full_name"),
     ]).then(([salesResult, tmResult]) => {
       if (salesResult.data) {
-        const rows = (salesResult.data as RenewalRow[]).map((s): RenewalRow => {
-          const days = s.renewal_due_date ? daysUntil(s.renewal_due_date) : null
+        const rows = (salesResult.data as unknown as RenewalRow[]).map((s): RenewalRow => {
+          // Telematics renews annually; a subscription department runs to
+          // contract_end. Whichever the department uses is the date we count to.
+          const dueDate = s.renewal_due_date ?? s.contract_end
+          const days = dueDate ? daysUntil(dueDate) : null
           const stage = s.lead?.funnel_stage ?? "post_sale"
           return {
             ...s,
@@ -115,7 +133,7 @@ export function RenewalsShell() {
       }
       setLoading(false)
     })
-  }, [])
+  }, [department?.id, department?.post_sale_model])
 
   async function markRenewed(row: RenewalRow) {
     if (!row.lead_id) return
