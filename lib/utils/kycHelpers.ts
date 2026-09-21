@@ -1,7 +1,7 @@
 import { z } from "zod"
 import type { KycFieldDef, Lead } from "@/types/crm"
 import { PROMOTED_KYC_KEYS, isPromotedKycKey } from "@/types/crm"
-import { normalizePhone, isValidKenyanPhone } from "./phoneHelpers"
+import { normalizePhone, isValidPhone } from "./phoneHelpers"
 
 /**
  * Rendering and validating the per-department KYC field set.
@@ -40,8 +40,8 @@ export function buildKycSchema(fields: KycFieldDef[]) {
         s = z
           .string()
           .optional()
-          .refine((v) => !v || isValidKenyanPhone(v), {
-            message: `${f.label} must be a valid Kenyan number`,
+          .refine((v) => !v || isValidPhone(v), {
+            message: `${f.label} must be a valid phone number`,
           })
         break
       case "multiselect":

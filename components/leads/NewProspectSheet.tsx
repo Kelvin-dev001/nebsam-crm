@@ -20,7 +20,7 @@ import { createClient } from "@/lib/supabase/client"
 import { useDepartment } from "@/lib/departments/useDepartment"
 import { useDepartmentStore } from "@/lib/stores/departmentStore"
 import { useTelemarketerStore } from "@/lib/stores/telemarketerStore"
-import { normalizePhone, isValidKenyanPhone } from "@/lib/utils/phoneHelpers"
+import { normalizePhone, isValidPhone } from "@/lib/utils/phoneHelpers"
 import {
   emptyKycValues,
   splitKycForSave,
@@ -163,7 +163,7 @@ export function NewProspectSheet({ open, onClose, onCreated }: Props) {
     const normalised = normalizePhone(raw)
     setPhone(normalised)
     if (!normalised || normalised === lastChecked.current) return
-    if (!isValidKenyanPhone(normalised)) {
+    if (!isValidPhone(normalised)) {
       setMatches([])
       return
     }
@@ -190,7 +190,7 @@ export function NewProspectSheet({ open, onClose, onCreated }: Props) {
   function validate(): boolean {
     const next: Record<string, string> = {}
     if (!phone) next._phone = "Phone number is required"
-    else if (!isValidKenyanPhone(phone)) next._phone = "Enter a valid Kenyan number"
+    else if (!isValidPhone(phone)) next._phone = "Enter a valid phone number"
     if (!effectiveDeptId) next._department = "Choose a department"
 
     for (const f of kycFields) {

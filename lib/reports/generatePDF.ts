@@ -48,7 +48,13 @@ function buildPage(doc: JsPDFType, report: TelemarketerReport, date: string, all
   doc.setFont("helvetica", "normal")
   doc.setFontSize(9)
   setTextColor(doc, "#94A3B8")
-  doc.text("Daily Performance Report", margin, 18)
+  doc.text(
+    report.departmentName
+      ? `Daily Performance Report · ${report.departmentName}`
+      : "Daily Performance Report",
+    margin,
+    18,
+  )
 
   // Date + telemarketer on the right
   doc.setFont("helvetica", "bold")
@@ -145,11 +151,11 @@ function buildPage(doc: JsPDFType, report: TelemarketerReport, date: string, all
   doc.setFont("helvetica", "bold")
   doc.setFontSize(9)
   setTextColor(doc, DARK_TEXT)
-  doc.text("ALL TELEMARKETERS — TODAY", margin, y)
+  doc.text("ALL SALES REPS — TODAY", margin, y)
   y += 5
 
-  const headers = ["Telemarketer", "Total Leads", "Calls Today", "Wins Today", "Win Rate", "Rank"]
-  const colWidths = [38, 25, 25, 25, 25, 20]
+  const headers = ["Sales Rep", "Department", "Total Leads", "Calls Today", "Wins Today", "Win Rate", "Rank"]
+  const colWidths = [32, 34, 22, 22, 22, 20, 16]
   const rowH = 8
 
   // Header row
@@ -179,7 +185,15 @@ function buildPage(doc: JsPDFType, report: TelemarketerReport, date: string, all
     }
 
     const rankLabel = RANK_LABELS[r.rank - 1] ?? `#${r.rank}`
-    const row = [r.name, String(r.totalLeads), String(r.callsOnDate), String(r.winsOnDate), `${r.winRate}%`, rankLabel]
+    const row = [
+      r.name,
+      r.departmentName ?? "—",
+      String(r.totalLeads),
+      String(r.callsOnDate),
+      String(r.winsOnDate),
+      `${r.winRate}%`,
+      rankLabel,
+    ]
 
     cx = margin + 3
     row.forEach((val, i) => {

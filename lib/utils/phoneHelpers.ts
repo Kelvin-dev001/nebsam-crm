@@ -49,6 +49,27 @@ export function isValidKenyanPhone(input: string | null | undefined): boolean {
 }
 
 /**
+ * True for any plausible phone number we are willing to store.
+ *
+ * THIS, not isValidKenyanPhone, is what forms and imports should gate on.
+ * Production carries 64 leads (about 2%) on non-Kenyan numbers — Tanzania,
+ * Uganda, South Sudan, DRC, Zambia, Djibouti, China, Qatar, Australia,
+ * Singapore — which is exactly what a Mombasa-corridor logistics business
+ * should expect. Requiring +254 would refuse a Tanzanian transporter's number
+ * and silently drop those rows on import.
+ *
+ * Kenyan input is still normalised to +254XXXXXXXXX; anything else is accepted
+ * as typed provided it looks like an international number.
+ */
+export function isValidPhone(input: string | null | undefined): boolean {
+  const n = normalizePhone(input)
+  if (!n) return false
+  if (isValidKenyanPhone(n)) return true
+  // International: a leading + and 8-15 digits, per E.164.
+  return /^\+\d{8,15}$/.test(n.replace(/[\s-]/g, ""))
+}
+
+/**
  * Display form: +254 712 345 678. Storage never changes — this is presentation
  * only, so never feed the result back into a query or a duplicate check.
  */
