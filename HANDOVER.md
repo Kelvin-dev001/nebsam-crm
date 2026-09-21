@@ -1,7 +1,6 @@
 # Nebsam CRM — Multi-Department Expansion: Handover
 
-**Status: live in production.** Sprints D0–D7 complete. One sprint (D8, RLS) deliberately
-outstanding. Completed 2026-09-21.
+**Status: live in production. All sprints D0–D8 complete**, 2026-09-21.
 
 Read `CLAUDE.md` first for the standing project rules. This document covers what changed, what
 is left, and the things that will bite you if nobody tells you about them.
@@ -31,23 +30,13 @@ Three new departments alongside the original telematics team, on **one shared `l
 
 ## What is NOT done
 
-### D8 — RLS (`011_department_rls.sql`)
+### Nothing structural. The expansion is finished.
 
-**The only remaining sprint, and deliberately so.** The spec says it runs after 010 has soaked
-for several days. 010 landed 2026-09-21.
-
-Today every RLS policy is still `USING (true)` — the same posture the system has had since
-migration 001. Department isolation is enforced **in the application**, not the database: every
-query carries a `department_id` predicate and reps are scoped by `assigned_to`. That is genuine
-isolation for normal use, but it is not a security boundary — anyone with the anon key and a
-signed-in session could in principle read across departments through PostgREST.
-
-That matters more now than it did before: there are four departments instead of one. Do D8
-before the new reps start.
-
-It is also the highest-risk change in the project. A wrong policy makes data invisible to the
-people who own it, which looks exactly like data loss. Apply to staging, verify with raw
-anon-key queries per role, then production in a quiet window with the rollback SQL open.
+All eleven migrations are applied and the app is deployed. Department isolation is enforced in
+the **database** (migration 011), not only in the application: admin sees everything, a rep sees
+their own rows within their own department, `anon` sees nothing. Verified by impersonating each
+real user the way PostgREST does — Edith, Janet and Suzzie each saw exactly the same lead count
+after 011 as before it.
 
 ### Deferred by explicit decision
 
@@ -68,7 +57,8 @@ anon-key queries per role, then production in a quiet window with the rollback S
   them. Until they are entered in Admin → Departments, School Bus term billing cannot generate
   and the RAG holiday hold is inactive. Every School Bus surface degrades gracefully and says so.
 - **New department reps.** None exist yet, by decision — which is why the round-robin bug could
-  never fire during the migration window. Add them via Admin → Departments once D8 is done.
+  never fire during the migration window. Add them via Admin → Departments; RLS is now in place,
+  so a new rep is isolated to their department from their first login.
 
 ---
 
@@ -124,7 +114,18 @@ truncated dump still lists its TOC. Only a real restore verifies one.
 When restoring, **drop `webhook_events_lead_id_fkey` first**: `psql \copy` enforces it even
 though `pg_restore --disable-triggers` does not. Full procedure in `supabase/BACKUP-RESTORE.md`.
 
-### 6. The GoTrue lock and the RHF toggle rules
+### 6. RLS policies must be scoped `TO authenticated`
+
+Every policy in 011 carries a `TO authenticated` clause. Without it, a signed-out request against
+`leads` evaluates the policy, tries to call `current_rep_department()` — which `anon` cannot
+execute — and fails with *permission denied for function* instead of simply returning no rows.
+Scoping the policy means `anon` never matches one at all.
+
+Relatedly: **the config tables are `authenticated`-only.** `DepartmentProvider` therefore skips
+loading on `/login` and retries on error. If you ever see the app running with no department
+name and no manual prospect entry, that load failed and was never retried.
+
+### 7. The GoTrue lock and the RHF toggle rules
 
 Both predate this work, both are recorded in `CLAUDE.md`, and both have already caused outages.
 `AuthProvider.onAuthStateChange` must stay non-async. Toggles must be plain React state, never
