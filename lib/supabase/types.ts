@@ -22,7 +22,7 @@ export interface Database {
           user_id: string | null
         }
         Insert: {
-          department_id?: string
+          department_id?: string | null
           job_title?: string | null
           id?: string
           full_name: string
@@ -33,7 +33,7 @@ export interface Database {
           user_id?: string | null
         }
         Update: {
-          department_id?: string
+          department_id?: string | null
           job_title?: string | null
           id?: string
           full_name?: string
@@ -67,7 +67,7 @@ export interface Database {
           updated_at: string
         }
         Insert: {
-          department_id?: string
+          department_id?: string | null
           kyc?: Json
           created_by?: string | null
           company_name?: string | null
@@ -87,7 +87,7 @@ export interface Database {
           updated_at?: string
         }
         Update: {
-          department_id?: string
+          department_id?: string | null
           kyc?: Json
           created_by?: string | null
           company_name?: string | null
@@ -133,7 +133,7 @@ export interface Database {
           created_at: string
         }
         Insert: {
-          department_id?: string
+          department_id?: string | null
           id?: string
           lead_id: string
           telemarketer_id: string
@@ -148,7 +148,7 @@ export interface Database {
           created_at?: string
         }
         Update: {
-          department_id?: string
+          department_id?: string | null
           id?: string
           lead_id?: string
           telemarketer_id?: string
@@ -203,7 +203,7 @@ export interface Database {
           created_at: string
         }
         Insert: {
-          department_id?: string
+          department_id?: string | null
           contract_start?: string | null
           contract_end?: string | null
           billing_cycle?: string | null
@@ -225,7 +225,7 @@ export interface Database {
           created_at?: string
         }
         Update: {
-          department_id?: string
+          department_id?: string | null
           contract_start?: string | null
           contract_end?: string | null
           billing_cycle?: string | null
@@ -278,7 +278,7 @@ export interface Database {
           created_at: string
         }
         Insert: {
-          department_id?: string
+          department_id?: string | null
           id?: string
           lead_id: string
           sale_id?: string | null
@@ -291,7 +291,7 @@ export interface Database {
           created_at?: string
         }
         Update: {
-          department_id?: string
+          department_id?: string | null
           id?: string
           lead_id?: string
           sale_id?: string | null
@@ -372,13 +372,13 @@ export interface Database {
           updated_at: string
         }
         Insert: {
-          department_id?: string
+          department_id?: string | null
           id?: string
           last_assigned_telemarketer_id?: string | null
           updated_at?: string
         }
         Update: {
-          department_id?: string
+          department_id?: string | null
           id?: string
           last_assigned_telemarketer_id?: string | null
           updated_at?: string
@@ -465,7 +465,7 @@ export interface Database {
         }
         Update: {
           id?: string
-          department_id?: string
+          department_id?: string | null
           key?: string
           label?: string
           sort_order?: number
@@ -508,7 +508,7 @@ export interface Database {
         }
         Update: {
           id?: string
-          department_id?: string
+          department_id?: string | null
           key?: string
           label?: string
           field_type?: string
@@ -543,7 +543,7 @@ export interface Database {
         }
         Update: {
           id?: string
-          department_id?: string
+          department_id?: string | null
           name?: string
           unit_price?: number | null
           currency?: string
@@ -590,7 +590,7 @@ export interface Database {
         Update: {
           id?: string
           lead_id?: string
-          department_id?: string
+          department_id?: string | null
           telemarketer_id?: string
           order_date?: string
           product?: string
@@ -680,7 +680,7 @@ export interface Database {
         Update: {
           id?: string
           lead_id?: string
-          department_id?: string
+          department_id?: string | null
           registration_number?: string
           route_name?: string | null
           capacity?: number | null
@@ -733,7 +733,7 @@ export interface Database {
           id?: string
           lead_id?: string
           sale_id?: string | null
-          department_id?: string
+          department_id?: string | null
           academic_term_id?: string
           bus_count?: number
           amount_per_bus?: number | null
@@ -750,6 +750,18 @@ export interface Database {
     }
     Views: Record<string, never>
     Functions: {
+      rename_funnel_stage: {
+        Args: { p_stage_id: string; p_new_key: string }
+        Returns: Json
+      }
+      reorder_funnel_stages: {
+        Args: { p_stage_ids: string[] }
+        Returns: Json
+      }
+      validate_academic_terms: {
+        Args: Record<string, never>
+        Returns: Json
+      }
       assign_lead_round_robin_v2: {
         Args: {
           p_department_slug: string
