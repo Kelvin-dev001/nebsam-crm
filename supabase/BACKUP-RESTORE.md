@@ -107,6 +107,21 @@ against not-yet-loaded parents. Always use `-v ON_ERROR_STOP=1` — without it a
 scrolls past and you get a silently partial restore, which is the failure this whole document
 exists to prevent.
 
+**Drop the webhook_events FK before loading the CSV chunks.** `pg_restore --disable-triggers`
+suppresses foreign-key checks, but `psql \copy` does NOT — so the chunk load enforces
+`webhook_events_lead_id_fkey` and fails on any event referencing a lead the `leads` dump did not
+capture. Proven on the pre-010 restore (2026-09-21): the final chunk aborted on exactly this.
+
+```sql
+ALTER TABLE webhook_events DROP CONSTRAINT webhook_events_lead_id_fkey;
+-- ... load every chunk ...
+-- then, if you want the constraint back, clear the orphans first:
+DELETE FROM webhook_events w WHERE w.lead_id IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM leads l WHERE l.id = w.lead_id);
+ALTER TABLE webhook_events ADD CONSTRAINT webhook_events_lead_id_fkey
+  FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE SET NULL;
+```
+
 Finally, compare row counts and `max()` timestamps against
 `supabase/migrations/_pre009_snapshot_output.md`, and check for orphans:
 

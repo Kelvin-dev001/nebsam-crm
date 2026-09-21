@@ -130,3 +130,62 @@ Verified by `has_function_privilege()` rather than by invoking, because calling
 Measured across the apply window: `call_logs` 1,870 → 1,871, `leads` 3,414 → 3,417,
 `webhook_events` 17,029 → 17,069. A rep logged a call at 07:24 UTC (10:24 EAT) while these were
 being applied. No disruption.
+
+---
+
+# 010 — production cutover record
+
+Applied to **production** on **2026-09-21, ~20:45 EAT**. The only destructive migration in the
+project.
+
+| Step | Result |
+|---|---|
+| `SET NOT NULL` on `department_id` | all six tables |
+| Drop global `leads_phone_number_key` | dropped; `leads_dept_phone_uniq` now the sole phone key |
+| Repoint pg_cron | `rag-auto-flag` → `SELECT public.rag_auto_flag_v2();` |
+| `REPLICA IDENTITY FULL` on `leads` | `relreplident = f` |
+| v1 functions | retained as the rollback path |
+
+## Verification
+
+- Row counts and the top-20 last-touched ordering **byte-identical** to the baseline captured
+  minutes earlier.
+- `leads_updated_at` and `sales_renewal_due_date` both `tgenabled = O`.
+- `leads_dept_phone_uniq`: `indisvalid = true`, `indisunique = true`, **0** duplicate
+  (department, phone) pairs. It is an INDEX rather than a CONSTRAINT — built with
+  `CREATE UNIQUE INDEX CONCURRENTLY` in 009b — so it is correctly absent from `pg_constraint`.
+  Do not read that absence as "no uniqueness".
+- Section 10 checklist against production: **19/19, zero failures**.
+
+## Backup, verified by an actual restore
+
+`prod-pre010-20260921-202605` — 14 tables, 17,115 webhook rows, zero dump failures. Restored in
+full into the local cluster: leads 3,430 · call_logs 1,941 · webhook_events 17,115 · config
+4/60/57/38.
+
+The restore exposed a real gap in the documented procedure: `psql \copy` enforces
+`webhook_events_lead_id_fkey` even though `pg_restore --disable-triggers` does not, so the final
+chunk aborted on a row referencing a lead the `leads` dump had not captured. `BACKUP-RESTORE.md`
+now says to drop that FK before loading chunks.
+
+It also measured the cross-table drift for the first time: **1 orphaned row in 17,115 (0.006%)**,
+a lead created in the ~4-minute gap between the two exports. The backup is a sound recovery point
+to within a few minutes, not to a single instant.
+
+## The point of no return
+
+Restoring the global phone constraint only succeeds while no two departments share a number:
+
+```sql
+ALTER TABLE leads ADD CONSTRAINT leads_phone_number_key UNIQUE (phone_number);
+```
+
+**Not yet crossed** — the three new departments hold zero leads. It closes the first time a rep
+enters a number telematics already holds, which is the entire point of decision D2.
+
+## What to watch
+
+The 05:00 UTC (08:00 EAT) cron run on 2026-09-22 is the **first on `rag_auto_flag_v2`**. Compare
+its result against the previous morning's: v2 was proven on staging to produce byte-identical
+per-lead output to v1 across 3,393 leads, so the RAG distribution should not move beyond normal
+daily drift.
