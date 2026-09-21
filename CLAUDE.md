@@ -260,7 +260,8 @@ passing.
       middleware route guard, department-scoped backlog and renewals.
 - [x] **D5b** — `/buses` + `BusRegisterShell`, `/term-billing` + `TermBillingShell`,
       `generate_term_billings` wired to the UI. Term calendar still empty until D6.
-- [ ] **D6** — Admin: Departments tab, assignment, CSV, reports.
+- [x] **D6** — Departments tab (stage/KYC/product/term-calendar editors, rep assignment),
+      CSV import with department + KYC mapping, reports grouped by department, admin filters.
 - [ ] **D7** — Deploy the app, then run the 010 cutover.
 - [ ] **D8** — RLS (`011`), after a soak.
 
