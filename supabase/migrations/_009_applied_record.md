@@ -87,3 +87,46 @@ node scripts/migrate-file.mjs supabase/migrations/009_rollback.sql --confirm=sln
 
 This stays safe **only until the app deploy**. Once the new app is live it reads
 `leads.department_id` and the config tables, so the app must be rolled back first.
+
+---
+
+# 009c / 009d / 009e — production apply record
+
+Applied to **production** on **2026-09-21, ~10:25–10:30 EAT** (Monday, during business hours —
+safe because none of these take a table lock; only 009 itself did).
+
+| # | File | Result |
+|---|---|---|
+| 1 | `009e_function_grants.sql` | Closed the **pre-existing** anon exposure on `assign_lead_round_robin` and `rag_auto_flag` |
+| 2 | `009c_departments_functions.sql` | 7 department functions created, called by nothing |
+| 3 | `009d_admin_functions.sql` | 3 admin functions created |
+| 4 | `009e_function_grants.sql` again | Locked down the 10 functions just created |
+
+009e ran **first and last** deliberately. First, because it closes a hole that was live on
+production. Last, because Supabase's default privileges grant `anon` EXECUTE on every newly
+created function — so 009c and 009d re-opened it for their own functions the moment they ran.
+009e is idempotent by design for exactly this reason.
+
+## Final grant state (verified)
+
+`anon = false` on **all 15** functions in `public`. `authenticated = true` on exactly the eight
+the browser calls: `create_manual_lead`, `check_phone_across_departments`,
+`generate_term_billings`, `is_school_holiday`, `normalize_phone_ke`, `rename_funnel_stage`,
+`reorder_funnel_stages`, `validate_academic_terms`. `service_role = true` throughout.
+
+Verified by `has_function_privilege()` rather than by invoking, because calling
+`assign_lead_round_robin` would create a real lead and `rag_auto_flag` would rewrite
+`rag_status` across every lead in the database.
+
+## Nothing the live system depends on moved
+
+- pg_cron still `0 5 * * *` → `SELECT public.rag_auto_flag();` (**v1**)
+- `leads_updated_at` and `sales_renewal_due_date` both `tgenabled = O`
+- `leads_phone_number_key` still present
+- The webhook still calls v1 — switching it to v2 is part of the D7 app deploy
+
+## The team kept working throughout
+
+Measured across the apply window: `call_logs` 1,870 → 1,871, `leads` 3,414 → 3,417,
+`webhook_events` 17,029 → 17,069. A rep logged a call at 07:24 UTC (10:24 EAT) while these were
+being applied. No disruption.

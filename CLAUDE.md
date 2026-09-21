@@ -22,7 +22,7 @@ Lucide · Sonner · jsPDF · deployed on Vercel.
 
 ## Current Production State (verified 2026-09-20)
 
-**Database — migrations 001–009 applied** (009 + 009b + `seed_departments.sql` on 2026-09-20;
+**Database — migrations 001–009 applied, plus 009c / 009d / 009e** (009 + 009b + `seed_departments.sql` on 2026-09-20;
 the app is not yet deployed against them, so nothing reads the new columns yet).
 
 | Table | Rows | Notes |
@@ -82,11 +82,6 @@ plus `/api/webhook/whatsapp`, `/api/whatsapp/{send,installed-message,test}`.
   port 6543 with an explanation.
 - Migrations 002–008 were applied by hand in the Supabase SQL editor. 009 onward go through
   the runner.
-
-**DEPLOY BLOCKER: 009c must be applied to production before the app ships.** The D4 UI calls
-`create_manual_lead` and `check_phone_across_departments`, which only exist in
-`009c_departments_functions.sql`. That file is on staging but deliberately not on production
-yet. Deploying the app first would give every rep a "New Prospect" button that fails.
 
 **Backups — see `supabase/BACKUP-RESTORE.md` before every migration.** A plain `pg_dump` of the
 whole database *does not work here*: the session pooler drops long `COPY` streams, so the backup
@@ -221,8 +216,8 @@ REVOKE ALL ON FUNCTION public.<name>(<args>) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.<name>(<args>) TO service_role;  -- plus authenticated if the browser calls it
 ```
 
-Production's `assign_lead_round_robin` and `rag_auto_flag` predate this work and are still
-`(default: PUBLIC)` until 009e is applied there.
+009e was applied to production on 2026-09-21; `anon` now has EXECUTE on nothing in `public`.
+Re-run 009e after any migration that creates a function.
 
 ## Known issue: RED leads never de-escalate to AMBER
 
