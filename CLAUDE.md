@@ -201,6 +201,29 @@ the runner printed it, the `--dry-run` output, confirmation that a fresh `pg_dum
 was checked, and the rollback command. Then wait for Kelvin to say go. No exceptions — a live
 CRM that three telemarketers are working in right now does not get an unannounced migration.
 
+## Function grants: `REVOKE FROM PUBLIC` is NOT enough
+
+Supabase sets `ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT EXECUTE ON FUNCTIONS TO anon,
+authenticated, service_role`. **Every function created in `public` is therefore executable by
+`anon` — the key that ships inside the browser bundle.** A `REVOKE ALL ... FROM PUBLIC` removes
+only the PUBLIC pseudo-role grant and leaves the explicit `anon=X` grant in place.
+
+This was found on 2026-09-21 by calling the staging REST API with nothing but the public anon
+key: it successfully ran `create_manual_lead` and **created a lead**, read
+`check_phone_across_departments` (other departments' lead summaries, including rep names), and
+ran `rag_auto_flag_v2`. `009e_function_grants.sql` locks every function down and verifies that
+`anon` ends up with EXECUTE on nothing.
+
+**Every future `CREATE FUNCTION` in this project must be followed by:**
+
+```sql
+REVOKE ALL ON FUNCTION public.<name>(<args>) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.<name>(<args>) TO service_role;  -- plus authenticated if the browser calls it
+```
+
+Production's `assign_lead_round_robin` and `rag_auto_flag` predate this work and are still
+`(default: PUBLIC)` until 009e is applied there.
+
 ## Known issue: RED leads never de-escalate to AMBER
 
 `rag_auto_flag()` rule 3 — the only path from RED back to AMBER — **has never fired**. It tests
