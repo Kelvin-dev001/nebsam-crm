@@ -72,8 +72,7 @@ These look identical to before, but the machinery beneath them is new.
 - [ ] **B4.** The leads filters still work: RAG, stage, product, search, contacted.
 - [ ] **B5.** **Download My Report** on the dashboard produces a PDF, and the header now reads
       "Daily Performance Report · Vehicle Telematics" with a Department column in the table.
-- [ ] **B6.** Tomorrow morning, RAG counts look normal — not a sudden mass of red or green.
-      (First run of `rag_auto_flag_v2`.)
+- [x] **B6.** ~~Tomorrow morning, RAG counts look normal~~ — **PASSED 2026-09-22.** See F1.
 
 ---
 
@@ -151,8 +150,11 @@ This is the payoff of decision D3, and the part most worth proving to yourself.
 
 ## F. Only time can test these
 
-- [ ] **F1.** Tomorrow's **05:00 UTC / 08:00 EAT** cron run. First on `rag_auto_flag_v2`. RAG
-      spread should not jump.
+- [x] **F1.** ~~Tomorrow's 05:00 UTC cron run~~ — **PASSED.** The first production run of
+      `rag_auto_flag_v2` completed `succeeded` at `2026-09-22 05:00:00 UTC`. RED went
+      **2,715 → 2,716 (+1)** while the total went 3,431 → 3,452 (+21 leads overnight); amber 647,
+      green 89. A v2 that had diverged from v1 would have reflagged hundreds on its first pass.
+      This was the last irreversible unknown in the migration.
 - [ ] **F2.** After a week, follow-up alarms and notifications still fire for the right rep.
 - [ ] **F3.** When the first non-telematics rep is created, confirm they log in and see **only**
       their own department — and that a telematics rep still sees exactly what they saw before.

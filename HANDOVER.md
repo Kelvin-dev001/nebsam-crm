@@ -186,9 +186,11 @@ uses the feature, which is the entire point of decision D2. Just know where the 
 
 ## What to watch next
 
-1. **The 05:00 UTC cron on 2026-09-22** is the first run on `rag_auto_flag_v2`. v2 was proven on
-   staging to produce byte-identical per-lead output to v1 across 3,393 leads, so the RAG spread
-   should not move beyond normal daily drift. Compare against the previous morning.
+1. ~~**The 05:00 UTC cron on 2026-09-22**~~ — **done, and it passed.** The first production run
+   of `rag_auto_flag_v2` reported `succeeded` at `2026-09-22 05:00:00 UTC`. RED moved
+   **2,715 → 2,716** against 21 new leads overnight (amber 647, green 89). That matches the
+   staging finding that v2 is per-lead identical to v1, and it closes the last irreversible
+   unknown: the cron was repointed in 010 and this was the first time it ran unattended.
 2. **The first manually entered prospect** in a new department — the first real exercise of
    `create_manual_lead` in production.
 3. **The first cross-department duplicate number**, which crosses the point of no return above.
