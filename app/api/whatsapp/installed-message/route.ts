@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { requireUser } from "@/lib/auth/requireUser"
 import { createClient } from "@supabase/supabase-js"
 import { addDays, format } from "date-fns"
 
@@ -15,6 +16,12 @@ function normalisePhone(raw: string): string {
 // ── Handler ───────────────────────────────────────────────────────────────────
 
 export async function POST(request: NextRequest) {
+  // ── Caller check (U1) ──────────────────────────────────────────────────────
+  // The only gate: middleware.ts returns early for /api. This route uses the
+  // service-role key, so an unauthenticated caller reached the whole database.
+  const guard = await requireUser()
+  if (!guard.ok) return guard.response
+
   let body: { leadId: string }
   try {
     body = await request.json()

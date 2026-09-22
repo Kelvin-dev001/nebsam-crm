@@ -80,6 +80,17 @@ been exposed this way since long before this project.
 the catalogue and is idempotent for exactly this reason. `scripts/departments-check.mjs` asserts
 `anon` is refused, so it will fail if someone forgets.
 
+**But know what that file does before you run it.** It REVOKES from every function in `public`
+and then re-grants. Its `authenticated` allowlist predated migration 011, so re-running it stripped
+`is_admin()`, `current_rep()` and `current_rep_department()` — the three functions all fifteen
+policies in 011 call. Because a policy is evaluated as the querying role, every signed-in query
+then failed with *permission denied for function*. That is an outage for the whole team, not a
+quiet loss of rows. It happened on staging during U1; production escaped on ordering alone.
+
+U1 fixed the cause: 009e now grants `authenticated` to anything referenced in `pg_policies`
+automatically, and refuses to complete if a policy-referenced function would be left
+unexecutable. Keep it derived. A hardcoded list will drift again.
+
 ### 2. `leads_dept_phone_uniq` is an INDEX, not a CONSTRAINT
 
 009b built it with `CREATE UNIQUE INDEX CONCURRENTLY`, so it does not appear in `pg_constraint`.

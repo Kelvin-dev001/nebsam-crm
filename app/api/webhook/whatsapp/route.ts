@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
+import { checkWebhookSecret } from "@/lib/auth/webhookSecret"
 
 // ── Payload extraction ─────────────────────────────────────────────────────────
 
@@ -73,6 +74,17 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  // ── Caller check (U1) ──────────────────────────────────────────────────────
+  // Fails OPEN until WHATSAPP_WEBHOOK_SECRET is set in both Vercel and the BSP
+  // console, because this is the team's only automated lead source and a check
+  // that does not match what the BSP sends would stop intake silently. See
+  // lib/auth/webhookSecret.ts for the two-step rollout.
+  const auth = checkWebhookSecret(request)
+  if (!auth.ok) {
+    console.warn(`[webhook] rejected: ${auth.reason}`)
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
   let payload: Record<string, unknown>
   try {
     payload = await request.json()

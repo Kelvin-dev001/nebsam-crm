@@ -46,7 +46,11 @@ export type LeadSource =
 
 export type FollowUpType = "pre_sale" | "post_sale_renewal" | "check_in"
 
-export type FollowUpStatus = "pending" | "completed" | "missed" | "rescheduled"
+// "cancelled" is set by reassign_rep_open_work (013) when a rep is deactivated
+// and the department has no other active rep to inherit their work.
+// followup_schedule.telemarketer_id is NOT NULL, so a pending follow-up cannot
+// be sent to the backlog the way a lead can - it has to be retired instead.
+export type FollowUpStatus = "pending" | "completed" | "missed" | "rescheduled" | "cancelled"
 
 export type SubscriptionType = "annual" | "once_off"
 

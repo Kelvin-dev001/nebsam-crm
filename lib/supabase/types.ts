@@ -13,6 +13,8 @@ export interface Database {
         Row: {
           department_id: string
           job_title: string | null
+          deactivated_at: string | null
+          deactivated_reason: string | null
           id: string
           full_name: string
           email: string
@@ -24,6 +26,8 @@ export interface Database {
         Insert: {
           department_id?: string | null
           job_title?: string | null
+          deactivated_at?: string | null
+          deactivated_reason?: string | null
           id?: string
           full_name: string
           email: string
@@ -35,6 +39,8 @@ export interface Database {
         Update: {
           department_id?: string | null
           job_title?: string | null
+          deactivated_at?: string | null
+          deactivated_reason?: string | null
           id?: string
           full_name?: string
           email?: string
@@ -42,6 +48,81 @@ export interface Database {
           is_active?: boolean
           created_at?: string
           user_id?: string | null
+        }
+        Relationships: []
+      }
+      admin_profiles: {
+        Row: {
+          user_id: string
+          full_name: string
+          phone: string | null
+          is_active: boolean
+          is_shared_account: boolean
+          created_by: string | null
+          deactivated_at: string | null
+          deactivated_reason: string | null
+          created_at: string
+        }
+        Insert: {
+          user_id: string
+          full_name: string
+          phone?: string | null
+          is_active?: boolean
+          is_shared_account?: boolean
+          created_by?: string | null
+          deactivated_at?: string | null
+          deactivated_reason?: string | null
+          created_at?: string
+        }
+        Update: {
+          user_id?: string
+          full_name?: string
+          phone?: string | null
+          is_active?: boolean
+          is_shared_account?: boolean
+          created_by?: string | null
+          deactivated_at?: string | null
+          deactivated_reason?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
+      user_admin_audit: {
+        Row: {
+          id: string
+          action: string
+          target_kind: string
+          target_user_id: string | null
+          target_rep_id: string | null
+          performed_by: string | null
+          performed_by_name: string | null
+          performed_by_email: string | null
+          details: Json
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          action: string
+          target_kind?: string
+          target_user_id?: string | null
+          target_rep_id?: string | null
+          performed_by?: string | null
+          performed_by_name?: string | null
+          performed_by_email?: string | null
+          details?: Json
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          action?: string
+          target_kind?: string
+          target_user_id?: string | null
+          target_rep_id?: string | null
+          performed_by?: string | null
+          performed_by_name?: string | null
+          performed_by_email?: string | null
+          details?: Json
+          created_at?: string
         }
         Relationships: []
       }
@@ -845,3 +926,5 @@ export type ServiceOrderRow      = Database["public"]["Tables"]["service_orders"
 export type AcademicTermRow      = Database["public"]["Tables"]["academic_terms"]["Row"]
 export type SchoolBusRow         = Database["public"]["Tables"]["school_buses"]["Row"]
 export type TermBillingRow       = Database["public"]["Tables"]["term_billings"]["Row"]
+export type AdminProfileRow      = Database["public"]["Tables"]["admin_profiles"]["Row"]
+export type UserAdminAuditRow    = Database["public"]["Tables"]["user_admin_audit"]["Row"]

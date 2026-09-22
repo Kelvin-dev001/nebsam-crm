@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { requireUser } from "@/lib/auth/requireUser"
 import { createClient } from "@supabase/supabase-js"
 
 // ── Phone normalisation ───────────────────────────────────────────────────────
@@ -15,6 +16,13 @@ function normalizePhone(phone: string): string {
 // ── Handler ───────────────────────────────────────────────────────────────────
 
 export async function POST(request: NextRequest) {
+  // ── Caller check (U1) ──────────────────────────────────────────────────────
+  // middleware.ts returns early for every /api path, so this is the ONLY gate.
+  // Until U1 this route was open to the entire internet: anyone could POST
+  // {to, message} and send a WhatsApp from the company's number.
+  const guard = await requireUser()
+  if (!guard.ok) return guard.response
+
   let body: { to: string; message: string }
   try {
     body = await request.json()

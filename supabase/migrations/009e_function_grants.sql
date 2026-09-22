@@ -74,7 +74,7 @@ BEGIN
     -- future job. It keeps everything.
     EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO service_role', v_sig);
 
-    -- Signed-in users get exactly the functions the app calls from the browser.
+    -- Signed-in users get exactly the functions the app calls from the browser...
     IF r.proname IN (
       'create_manual_lead',
       'check_phone_across_departments',
@@ -84,7 +84,32 @@ BEGIN
       'rename_funnel_stage',
       'reorder_funnel_stages',
       'validate_academic_terms'
-    ) THEN
+    )
+    -- ...PLUS anything an RLS POLICY calls. This clause was added in U1 after
+    -- re-running this file broke staging, and it is the more important half.
+    --
+    -- A policy expression is evaluated with the privileges of the QUERYING
+    -- role. So if `authenticated` cannot EXECUTE a function a policy calls,
+    -- every query by every signed-in user fails with
+    --     permission denied for function ...
+    -- rather than simply returning no rows. The app goes down for everyone.
+    --
+    -- That is exactly what happened: the hardcoded list above was written
+    -- before migration 011, which added is_admin(), current_rep() and
+    -- current_rep_department() and granted them to authenticated. This file
+    -- revokes from EVERY function before re-granting, so re-running it stripped
+    -- all three and broke all fifteen policies in 011. Production was spared
+    -- only because 011 happened to be applied after the last run of this file.
+    --
+    -- Deriving it from pg_policies rather than adding three more names means a
+    -- future helper cannot reintroduce the same outage.
+       OR EXISTS (
+         SELECT 1 FROM pg_policies pol
+         WHERE pol.schemaname = 'public'
+           AND (coalesce(pol.qual, '') || ' ' || coalesce(pol.with_check, ''))
+               LIKE '%' || r.proname || '(%'
+       )
+    THEN
       EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO authenticated', v_sig);
     END IF;
 
@@ -92,6 +117,40 @@ BEGIN
     -- caller has business executing any of these.
     RAISE NOTICE 'locked down %', v_sig;
   END LOOP;
+END $$;
+
+-- ============================================================================
+-- Verification 1: every function an RLS POLICY calls must still be executable
+-- by `authenticated`, or the app is down for every signed-in user.
+--
+-- This check exists because this file caused exactly that outage on staging.
+-- It is deliberately first: a missing anon revoke is a security hole, but a
+-- missing authenticated grant is a total outage, and the outage should stop the
+-- migration before anything else is reported.
+-- ============================================================================
+
+DO $$
+DECLARE v_bad TEXT;
+BEGIN
+  SELECT string_agg(DISTINCT p.proname, ', ')
+    INTO v_bad
+  FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+  WHERE n.nspname = 'public' AND p.prokind = 'f'
+    AND EXISTS (
+      SELECT 1 FROM pg_policies pol
+      WHERE pol.schemaname = 'public'
+        AND (coalesce(pol.qual, '') || ' ' || coalesce(pol.with_check, ''))
+            LIKE '%' || p.proname || '(%'
+    )
+    AND NOT has_function_privilege('authenticated', p.oid, 'EXECUTE');
+
+  IF v_bad IS NOT NULL THEN
+    RAISE EXCEPTION
+      'RLS policies call these functions but `authenticated` cannot execute them: %. Every signed-in query would fail with "permission denied for function".',
+      v_bad;
+  END IF;
+
+  RAISE NOTICE 'OK: every policy-referenced function is executable by authenticated';
 END $$;
 
 -- ============================================================================

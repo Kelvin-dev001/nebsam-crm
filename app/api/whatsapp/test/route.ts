@@ -1,8 +1,16 @@
 import { NextResponse } from "next/server"
+import { requireAdmin } from "@/lib/auth/requireAdmin"
 
-// ── Diagnostic endpoint — GET https://nebsam-crm.vercel.app/api/whatsapp/test
-// Shows env-var status and makes a test call to the BSP.
-// Remove or restrict this endpoint once WhatsApp is confirmed working.
+// ── Diagnostic endpoint — GET /api/whatsapp/test
+//
+// ADMIN ONLY as of U1. Until then this was open to the whole internet AND it
+// echoed the first 8 characters of WHATSAPP_API_KEY along with its exact
+// length — a partial credential plus the search space for the rest. It also
+// sends a real WhatsApp message, so anyone could use it as a send oracle.
+//
+// It now reports presence only: SET / NOT SET, never a fragment of a value.
+// A diagnostic endpoint should say whether configuration exists, never what
+// it is.
 
 function normalizePhone(phone: string): string {
   const digits = phone.replace(/\D/g, "")
@@ -13,15 +21,19 @@ function normalizePhone(phone: string): string {
 }
 
 export async function GET() {
+  const guard = await requireAdmin()
+  if (!guard.ok) return guard.response
+
   const bspUrl = process.env.WHATSAPP_BSP_URL
   const sender = process.env.WHATSAPP_SENDER
 
   const apiKey = process.env.WHATSAPP_API_KEY
 
   const config = {
-    WHATSAPP_BSP_URL:  bspUrl  ? `${bspUrl.slice(0, 30)}…` : "NOT SET ❌",
-    WHATSAPP_SENDER:   sender  ? `${sender} ✅` : "NOT SET ❌",
-    WHATSAPP_API_KEY:  apiKey  ? `${apiKey.slice(0, 8)}… (${apiKey.length} chars) ✅` : "NOT SET ❌",
+    // Presence only. Never a prefix, never a length — both narrow a brute force.
+    WHATSAPP_BSP_URL:  bspUrl  ? "SET ✅" : "NOT SET ❌",
+    WHATSAPP_SENDER:   sender  ? "SET ✅" : "NOT SET ❌",
+    WHATSAPP_API_KEY:  apiKey  ? "SET ✅" : "NOT SET ❌",
     NEXT_PUBLIC_SUPABASE_URL:  process.env.NEXT_PUBLIC_SUPABASE_URL  ? "SET ✅" : "NOT SET ❌",
     SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY ? "SET ✅" : "NOT SET ❌",
   }

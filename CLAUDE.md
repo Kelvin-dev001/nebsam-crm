@@ -227,6 +227,19 @@ GRANT EXECUTE ON FUNCTION public.<name>(<args>) TO service_role;  -- plus authen
 009e was applied to production on 2026-09-21; `anon` now has EXECUTE on nothing in `public`.
 Re-run 009e after any migration that creates a function.
 
+**009e revokes from EVERY function before re-granting, and that once broke staging.** Its
+`authenticated` allowlist was a hardcoded list of names written before migration 011. 011 added
+`is_admin()`, `current_rep()` and `current_rep_department()` — which every one of its fifteen
+policies calls — so re-running 009e stripped their `authenticated` grant. A policy expression is
+evaluated with the privileges of the **querying** role, so every signed-in query then failed with
+*permission denied for function* rather than returning no rows: a total outage, not a quiet one.
+Production escaped only because 011 happened to be applied after the last 009e run.
+
+Fixed in U1: 009e now derives the grant from `pg_policies` — anything a policy calls keeps
+`authenticated` automatically — and its first verification block fails the migration if a
+policy-referenced function would be left unexecutable. **Do not replace that with a list of
+names.**
+
 ## Authorization: the role lives in `app_metadata`, never `user_metadata`
 
 **Migration 012, applied to production 2026-09-22.** Before it, `is_admin()` read
