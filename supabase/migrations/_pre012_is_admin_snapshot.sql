@@ -6,9 +6,13 @@
 --
 --   SELECT pg_get_functiondef('public.is_admin()'::regprocedure);
 --
--- Captured from staging (koifyemtduyyfqpkogpl) on 2026-09-22. Byte-identical to
--- the body declared in 011_department_rls.sql:51-59, and re-confirmed against
--- production at the §12 gate before 012 was applied.
+-- Captured from staging (koifyemtduyyfqpkogpl) on 2026-09-22 and confirmed to be
+-- production's live body, not merely staging's: md5(pg_get_functiondef(...)) is
+--
+--     885dd436628c29f63c32662632ebd485
+--
+-- on BOTH projects (slnphqsrrjpqcthezgun and koifyemtduyyfqpkogpl). It also
+-- matches the body declared in 011_department_rls.sql:51-59.
 --
 -- ----------------------------------------------------------------------------
 -- THIS IS THE ROLLBACK FOR MIGRATION 012.
