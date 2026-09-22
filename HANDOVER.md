@@ -125,6 +125,24 @@ Relatedly: **the config tables are `authenticated`-only.** `DepartmentProvider` 
 loading on `/login` and retries on error. If you ever see the app running with no department
 name and no manual prospect entry, that load failed and was never retried.
 
+### 7. `leads` has TWO foreign keys to `telemarketers`
+
+009 added `created_by UUID REFERENCES telemarketers(id)`. `assigned_to` was already there. So
+**every PostgREST embed of `telemarketers` sourced from `leads` is ambiguous** and fails with
+PGRST201 until you name the constraint:
+
+```ts
+telemarketer:telemarketers!leads_assigned_to_fkey(full_name)
+```
+
+This broke the admin All-Leads view and, worse, the lead detail page every rep uses — fixed in
+`c559f1e`. It survived the whole of D3-D8 because every check until then was SQL or
+PostgREST-without-embeds; nothing rendered a page. Embeds sourced from `call_logs` or `sales` are
+still unambiguous (one FK each) and need no hint.
+
+The reason it was invisible: `AllLeadsOverview` rendered its empty state instead of surfacing the
+query error. Worth logging failures in any new list view.
+
 ### 7. The GoTrue lock and the RHF toggle rules
 
 Both predate this work, both are recorded in `CLAUDE.md`, and both have already caused outages.
