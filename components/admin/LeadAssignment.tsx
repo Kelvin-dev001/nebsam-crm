@@ -41,7 +41,7 @@ export function LeadAssignment() {
     Promise.all([
       supabase
         .from("leads")
-        .select("id, phone_number, full_name, product_interested, funnel_stage, rag_status, telemarketer:telemarketers(id, full_name)")
+        .select("id, phone_number, full_name, product_interested, funnel_stage, rag_status, telemarketer:telemarketers!leads_assigned_to_fkey(id, full_name)")
         .order("created_at", { ascending: false })
         .limit(500),
       supabase.from("telemarketers").select("id, full_name").eq("is_active", true).order("full_name"),

@@ -45,7 +45,7 @@ export function AllLeadsOverview() {
       (() => {
         let q = supabase
           .from("leads")
-          .select("id, phone_number, full_name, company_name, department_id, product_interested, funnel_stage, rag_status, created_at, telemarketer:telemarketers(full_name)")
+          .select("id, phone_number, full_name, company_name, department_id, product_interested, funnel_stage, rag_status, created_at, telemarketer:telemarketers!leads_assigned_to_fkey(full_name)")
         // Admin sees everything by default; the filter narrows to one department.
         if (departmentFilter) q = q.eq("department_id", departmentFilter)
         return q.order("created_at", { ascending: false }).limit(500)

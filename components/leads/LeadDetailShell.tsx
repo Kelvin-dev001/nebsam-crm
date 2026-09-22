@@ -106,7 +106,7 @@ export function LeadDetailShell({ leadId }: Props) {
       .from("leads")
       .select(`
         *,
-        telemarketer:telemarketers(id, full_name, email),
+        telemarketer:telemarketers!leads_assigned_to_fkey(id, full_name, email),
         call_logs(
           id, called_at, duration_seconds, call_outcome, call_notes,
           rag_status_after_call, funnel_stage_after_call,
