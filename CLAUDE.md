@@ -356,8 +356,11 @@ Full spec: `USER-MANAGEMENT-PROMPT.md`.
       `012_admin_roster_and_role_source.sql`, and the app change (`lib/auth/getRole.ts` + four
       call sites) all applied to production 2026-09-22. See
       `supabase/migrations/_012_applied_record.md`.
-- [ ] **U1** — Server foundation: `lib/supabase/admin.ts`, `requireAdmin`/`requireUser`,
-      `tempPassword`, migration 013.
+- [x] **U1** — Server foundation (`lib/supabase/admin.ts`, `requireAdmin`/`requireUser`,
+      `tempPassword`, `notImplemented`), migration `013_user_management.sql`, the
+      `/api/admin/users/*` stubs, and **locking the four previously-unauthenticated API routes**.
+      Applied to production 2026-09-22; see `supabase/migrations/_013_applied_record.md`.
+      **Outstanding: `WHATSAPP_WEBHOOK_SECRET` is not set, so the webhook still accepts anyone.**
 - [ ] **U2** — Users tab + Add user. **Needs answers to `USER-MANAGEMENT-PROMPT.md` §3 first.**
 - [ ] **U3** — Passwords (admin reset, user change, break-glass script).
 - [ ] **U4** — Move department, deactivate, reactivate.
