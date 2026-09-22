@@ -25,7 +25,7 @@ Lucide · Sonner · jsPDF · deployed on Vercel.
 
 ## Current Production State (verified 2026-09-20)
 
-**Database — migrations 001–010 applied** (009, 009b, 009c, 009d, 009e, `seed_departments.sql`,
+**Database — migrations 001–012 applied** (009, 009b, 009c, 009d, 009e, `seed_departments.sql`,
 010 cutover). `department_id` is NOT NULL throughout; the phone key is per-department; the cron
 runs `rag_auto_flag_v2`. (009 + 009b + `seed_departments.sql` on 2026-09-20;
 the app is not yet deployed against them, so nothing reads the new columns yet).
@@ -227,6 +227,46 @@ GRANT EXECUTE ON FUNCTION public.<name>(<args>) TO service_role;  -- plus authen
 009e was applied to production on 2026-09-21; `anon` now has EXECUTE on nothing in `public`.
 Re-run 009e after any migration that creates a function.
 
+## Authorization: the role lives in `app_metadata`, never `user_metadata`
+
+**Migration 012, applied to production 2026-09-22.** Before it, `is_admin()` read
+`auth.users.raw_user_meta_data->>'role'` — a field the user it belongs to can write from the
+browser with the anon key:
+
+```js
+await supabase.auth.updateUser({ data: { role: 'admin' } })
+```
+
+All fifteen RLS policies in 011 call `is_admin()`, so **any rep could have granted themselves
+read/write on every lead, call log, sale and rep record in all four departments.**
+
+Being an admin now requires three facts that only the server can write, all read live:
+
+1. `auth.users.raw_app_meta_data->>'role' = 'admin'`
+2. an active row in `admin_profiles`
+3. the login is not banned
+
+**Rules that follow from this, and must not be relaxed:**
+
+- **Never read `user_metadata` for an authorization decision.** It still holds the old role value
+  (012 deliberately left it alone so nothing broke during the cutover) and it is not trustworthy.
+  Every role read goes through `lib/auth/getRole.ts`. `scripts/qa-test.mjs` §10 fails the run if
+  one ever comes back.
+- **Fail closed.** `roleOrDefault()` resolves an unknown role to `telemarketer`, never `admin`.
+  Several call sites branch as `role === "telemarketer" ? … : …` where the *else* branch is the
+  admin path, so a null role would otherwise take it.
+- **Read the role from `getUser()`, not from `session.user`.** The latter is decoded from a JWT up
+  to an hour old. In `AuthProvider.onAuthStateChange` this must stay inside the existing
+  `setTimeout(…, 0)` — the GoTrue lock rule still applies.
+- **`user_metadata` remains user-writable and always will be.** That is not the bug and cannot be
+  prevented. The fix is that nothing reads it for authorization.
+
+Deactivating an admin (clearing `admin_profiles.is_active`) takes effect on their **next query**,
+proven in an existing session with no JWT refresh — not whenever their token expires.
+
+Verify any time with `node scripts/u0-security-proof.mjs` (staging-guarded; it creates and deletes
+its own throwaway accounts).
+
 ## Known issue: RED leads never de-escalate to AMBER
 
 `rag_auto_flag()` rule 3 — the only path from RED back to AMBER — **has never fired**. It tests
@@ -294,6 +334,22 @@ passing.
 
 Sprint detail, acceptance criteria and the verification checklist live in
 `DEPARTMENTS-MASTER-PROMPT.md` §9 and §10.
+
+## Sprint Plan — user management
+
+Full spec: `USER-MANAGEMENT-PROMPT.md`.
+
+- [x] **U0** — Close the role hole. Step A (`scripts/backfill-app-metadata-roles.mjs`), migration
+      `012_admin_roster_and_role_source.sql`, and the app change (`lib/auth/getRole.ts` + four
+      call sites) all applied to production 2026-09-22. See
+      `supabase/migrations/_012_applied_record.md`.
+- [ ] **U1** — Server foundation: `lib/supabase/admin.ts`, `requireAdmin`/`requireUser`,
+      `tempPassword`, migration 013.
+- [ ] **U2** — Users tab + Add user. **Needs answers to `USER-MANAGEMENT-PROMPT.md` §3 first.**
+- [ ] **U3** — Passwords (admin reset, user change, break-glass script).
+- [ ] **U4** — Move department, deactivate, reactivate.
+- [ ] **U4b** — Named administrators, step-up auth, activity feed, retire the shared login.
+- [ ] **U5** — Verify, document, ship.
 
 ---
 

@@ -1,6 +1,6 @@
 # Nebsam CRM — Multi-Department Expansion: Handover
 
-**Status: live in production. All sprints D0–D8 complete**, 2026-09-21.
+**Status: live in production. All sprints D0–D8 complete**, 2026-09-21. **Sprint U0 (security) applied 2026-09-22** — see "Authorization" below.
 
 Read `CLAUDE.md` first for the standing project rules. This document covers what changed, what
 is left, and the things that will bite you if nobody tells you about them.
@@ -125,7 +125,32 @@ Relatedly: **the config tables are `authenticated`-only.** `DepartmentProvider` 
 loading on `/login` and retries on error. If you ever see the app running with no department
 name and no manual prospect entry, that load failed and was never retried.
 
-### 7. `leads` has TWO foreign keys to `telemarketers`
+### 7. Authorization reads `app_metadata`, and `user_metadata` is a trap
+
+Until 2026-09-22, `is_admin()` read `auth.users.raw_user_meta_data->>'role'` — which the user it
+belongs to can write from the browser with the anon key. Every RLS policy in 011 calls
+`is_admin()`, so **any rep could have made themselves an admin over all four departments.**
+Migration 012 moved authorization to `app_metadata` (service-role-writable only) plus an active
+`admin_profiles` row plus not-banned, all read live.
+
+`user_metadata` still holds the old role value, on purpose — 012 left it alone so nothing broke
+during the cutover. **It is not trustworthy and nothing may read it for an authorization
+decision.** Every role read goes through `lib/auth/getRole.ts`; `scripts/qa-test.mjs` §10 fails
+the run if one comes back.
+
+Two things people get wrong here:
+
+- **Reading the role from `session.user`.** That object is decoded from a JWT up to an hour old.
+  Use `getUser()`, and in `AuthProvider.onAuthStateChange` keep it inside the existing
+  `setTimeout(…, 0)` or you deadlock the GoTrue lock.
+- **Expecting the escalation write to be blocked.** It is not, and cannot be — `user_metadata` is
+  user-writable by design. `scripts/u0-security-proof.mjs` asserts the write still *succeeds* and
+  that it grants nothing.
+
+Useful property for U4b: clearing `admin_profiles.is_active` revokes access on the admin's **next
+query**, proven in a live session with no token refresh.
+
+### 8. `leads` has TWO foreign keys to `telemarketers`
 
 009 added `created_by UUID REFERENCES telemarketers(id)`. `assigned_to` was already there. So
 **every PostgREST embed of `telemarketers` sourced from `leads` is ambiguous** and fails with
@@ -143,7 +168,7 @@ still unambiguous (one FK each) and need no hint.
 The reason it was invisible: `AllLeadsOverview` rendered its empty state instead of surfacing the
 query error. Worth logging failures in any new list view.
 
-### 7. The GoTrue lock and the RHF toggle rules
+### 9. The GoTrue lock and the RHF toggle rules
 
 Both predate this work, both are recorded in `CLAUDE.md`, and both have already caused outages.
 `AuthProvider.onAuthStateChange` must stay non-async. Toggles must be plain React state, never
