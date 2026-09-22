@@ -57,7 +57,14 @@ export function generateTempPassword(): string {
  * generator that produced passwords its own policy rejected would lock out
  * every new user.
  */
-export const PASSWORD_MIN_LENGTH = 10
+// 8, per Kelvin's decision 2026-09-22 (§3 item 2). Matches Supabase's own
+// default minimum, so the dashboard policy and this rule agree.
+//
+// Note the GENERATOR above still produces 12 characters. A temporary password
+// is typed once and replaced, so there is no reason to make it the weakest
+// thing the policy allows — the minimum governs what USERS may choose, not
+// what we hand out.
+export const PASSWORD_MIN_LENGTH = 8
 
 export function checkPasswordPolicy(password: string): string | null {
   if (password.length < PASSWORD_MIN_LENGTH) {

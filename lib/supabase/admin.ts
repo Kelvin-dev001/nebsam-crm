@@ -39,6 +39,8 @@ export function createAdminClient() {
     )
   }
 
+  assertSameProject(url, key)
+
   return createClient<Database>(url, key, {
     auth: {
       // No session handling at all: this client is never a "user".
@@ -46,4 +48,43 @@ export function createAdminClient() {
       autoRefreshToken: false,
     },
   })
+}
+
+/**
+ * Fails loudly when the URL and the service-role key belong to different
+ * Supabase projects.
+ *
+ * This is easy to do by accident and the symptom is badly misleading. Point a
+ * dev server at staging by overriding NEXT_PUBLIC_SUPABASE_URL but leave
+ * SUPABASE_SERVICE_ROLE_KEY as production's, and every admin route answers
+ * "Could not verify your administrator access" — which reads as a permissions
+ * problem, sends you looking at RLS and roles, and is nothing of the sort.
+ *
+ * A legacy service key is a JWT carrying a `ref` claim naming its project. It
+ * is decoded here WITHOUT verification: the signature is irrelevant, we only
+ * want the project name for a sanity check, and Supabase rejects a bad key
+ * anyway. Newer `sb_secret_…` keys carry no claims, so they are skipped rather
+ * than guessed at.
+ */
+function assertSameProject(url: string, key: string) {
+  const urlRef = new URL(url).hostname.split(".")[0]
+
+  const parts = key.split(".")
+  if (parts.length !== 3) return // sb_secret_… or similar: nothing to compare.
+
+  let keyRef: string | undefined
+  try {
+    const payload = JSON.parse(Buffer.from(parts[1], "base64").toString("utf8"))
+    keyRef = payload?.ref
+  } catch {
+    return // Unparseable: let Supabase be the judge.
+  }
+
+  if (keyRef && keyRef !== urlRef) {
+    throw new Error(
+      `Supabase project mismatch: NEXT_PUBLIC_SUPABASE_URL points at "${urlRef}" ` +
+        `but SUPABASE_SERVICE_ROLE_KEY belongs to "${keyRef}". ` +
+        `Running against staging needs all three variables overridden, not just the URL.`,
+    )
+  }
 }

@@ -28,13 +28,21 @@ so it behaves identically.
 To point the app at staging, from the repo:
 
 ```bash
-# .env.local already holds STAGING_SUPABASE_URL / STAGING_SUPABASE_ANON_KEY.
+# .env.local holds STAGING_SUPABASE_URL / _ANON_KEY / _SERVICE_ROLE_KEY.
 NEXT_PUBLIC_SUPABASE_URL=https://koifyemtduyyfqpkogpl.supabase.co \
 NEXT_PUBLIC_SUPABASE_ANON_KEY=<STAGING_SUPABASE_ANON_KEY from .env.local> \
+SUPABASE_SERVICE_ROLE_KEY=<STAGING_SUPABASE_SERVICE_ROLE_KEY from .env.local> \
 npm run dev
 ```
 
-Then work at `http://localhost:3000`. Nothing you do there touches live data.
+**All three, not just the first two.** Every `/api/admin/*` route builds a service-role client from
+`SUPABASE_SERVICE_ROLE_KEY`, so overriding only the URL leaves the server talking to staging with
+production's key. The symptom is badly misleading: every admin route answers *"Could not verify
+your administrator access"*, which reads as a permissions bug and sends you looking at RLS.
+`lib/supabase/admin.ts` now detects the mismatch and throws a message naming both projects.
+
+Then work at `http://localhost:3000` (or 3001 if 3000 is busy — check the dev server's output).
+Nothing you do there touches live data.
 
 If you would rather test everything on production, that is defensible too — just prefix anything
 you create with `TEST` so it is easy to find and delete afterwards.

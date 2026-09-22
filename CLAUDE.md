@@ -348,6 +348,18 @@ passing.
 Sprint detail, acceptance criteria and the verification checklist live in
 `DEPARTMENTS-MASTER-PROMPT.md` §9 and §10.
 
+## User management decisions (2026-09-22, confirmed by Kelvin)
+
+| Topic | Decision |
+|---|---|
+| Login URL | `https://nebsam-crm.vercel.app/login` — used in the "copy as message" text an admin pastes into WhatsApp. Swap it in one place (`lib/auth/loginUrl.ts`) if a custom domain arrives. |
+| Password policy | **8+ characters, letters and digits.** Enforced in Zod via `checkPasswordPolicy()` so users get a readable message; Kelvin sets the matching rule in Supabase → Authentication → Policies. `generateTempPassword()` still issues 12 characters. |
+| Existing reps' passwords | **Not forced.** A per-user "Require password change at next login" button, pressed when convenient. `CREDENTIALS.md` is deleted by Kelvin once all three have changed. |
+| Admin tab name | "Telemarketers" → **"Users"**, since it now covers all four departments plus administrators. |
+| First named admins | Still outstanding — needed for U4b, not before. |
+
+Earlier decisions U-D1 to U-D8 are in `USER-MANAGEMENT-PROMPT.md` §2 and are not re-litigated.
+
 ## Sprint Plan — user management
 
 Full spec: `USER-MANAGEMENT-PROMPT.md`.
@@ -361,7 +373,9 @@ Full spec: `USER-MANAGEMENT-PROMPT.md`.
       `/api/admin/users/*` stubs, and **locking the four previously-unauthenticated API routes**.
       Applied to production 2026-09-22; see `supabase/migrations/_013_applied_record.md`.
       **Outstanding: `WHATSAPP_WEBHOOK_SECRET` is not set, so the webhook still accepts anyone.**
-- [ ] **U2** — Users tab + Add user. **Needs answers to `USER-MANAGEMENT-PROMPT.md` §3 first.**
+- [x] **U2** — Users tab (`UserManager`, replacing `TelemarketerManager`), Add user with a login,
+      "Create login" for unlinked rows, and the audit trail. Verified on staging, 27/27.
+      **Not yet deployed to production.**
 - [ ] **U3** — Passwords (admin reset, user change, break-glass script).
 - [ ] **U4** — Move department, deactivate, reactivate.
 - [ ] **U4b** — Named administrators, step-up auth, activity feed, retire the shared login.

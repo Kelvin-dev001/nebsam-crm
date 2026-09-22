@@ -7,7 +7,9 @@ import { DepartmentManager } from "./DepartmentManager"
 import { AllLeadsOverview } from "./AllLeadsOverview"
 import { LeadAssignment } from "./LeadAssignment"
 import { PerformanceSummary } from "./PerformanceSummary"
-import { TelemarketerManager } from "./TelemarketerManager"
+// TelemarketerManager is superseded by UserManager (sprint U2). Left in place,
+// unused, pending Kelvin's decision to delete it.
+import { UserManager } from "./UserManager"
 import { CSVImport } from "./CSVImport"
 import { RoundRobinWidget } from "./RoundRobinWidget"
 import { ReportsTab } from "./ReportsTab"
@@ -18,7 +20,7 @@ export function AdminShell() {
     <div className="p-4 lg:p-6 space-y-4">
       <div>
         <h1 className="text-2xl font-bold text-slate-900">Admin Panel</h1>
-        <p className="text-slate-500 text-sm mt-0.5">Manage leads, telemarketers, and imports</p>
+        <p className="text-slate-500 text-sm mt-0.5">Manage leads, users, and imports</p>
       </div>
 
       {/* Round Robin Widget — always visible above tabs */}
@@ -49,9 +51,9 @@ export function AdminShell() {
             <BarChart2 className="h-4 w-4" />
             Performance
           </TabsTrigger>
-          <TabsTrigger value="telemarketers" className="gap-1.5 px-4 pb-3 text-sm">
+          <TabsTrigger value="users" className="gap-1.5 px-4 pb-3 text-sm">
             <UserCog className="h-4 w-4" />
-            Telemarketers
+            Users
           </TabsTrigger>
           <TabsTrigger value="import" className="gap-1.5 px-4 pb-3 text-sm">
             <Upload className="h-4 w-4" />
@@ -78,8 +80,8 @@ export function AdminShell() {
         <TabsContent value="performance" className="mt-4">
           <PerformanceSummary />
         </TabsContent>
-        <TabsContent value="telemarketers" className="mt-4">
-          <TelemarketerManager />
+        <TabsContent value="users" className="mt-4">
+          <UserManager />
         </TabsContent>
         <TabsContent value="import" className="mt-4">
           <CSVImport />

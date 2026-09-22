@@ -831,6 +831,26 @@ export interface Database {
     }
     Views: Record<string, never>
     Functions: {
+      rep_workload: {
+        Args: Record<string, never>
+        Returns: Array<{ rep_id: string; open_leads: number; pending_followups: number }>
+      }
+      reassign_rep_open_work: {
+        Args: { p_from_rep: string; p_to_rep: string | null }
+        Returns: Json
+      }
+      revoke_user_sessions: {
+        Args: { p_user_id: string }
+        Returns: number
+      }
+      deactivate_admin_guarded: {
+        Args: { p_target: string; p_actor: string; p_reason?: string | null }
+        Returns: Json
+      }
+      reactivate_admin: {
+        Args: { p_target: string }
+        Returns: Json
+      }
       rename_funnel_stage: {
         Args: { p_stage_id: string; p_new_key: string }
         Returns: Json
