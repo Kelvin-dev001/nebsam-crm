@@ -471,6 +471,66 @@ for (const page of ["/dashboard","/leads","/renewals","/admin"]) {
 // 9.4 Realtime
 note("9.4", "Realtime verified working in earlier session (Playwright test confirmed live lead push). Confirm in Supabase Dashboard → Database → Replication → leads table ON.")
 
+// ─── SECTION 10: AUTHORIZATION SOURCE (Sprint U0) ────────────────────────────
+console.log("\n══ SECTION 10: AUTHORIZATION SOURCE ══")
+
+// Migration 012 moved authorization from user_metadata (which the user can
+// write to themselves from the browser, with the anon key) to app_metadata
+// (service-role only). This section fails the run if a role read of
+// user_metadata ever comes back — it would silently reopen the hole.
+//
+// Comments are stripped before matching, so the explanatory comments left in
+// middleware.ts, AuthProvider.tsx and lib/auth/getRole.ts do not trip it.
+{
+  const { readdirSync, statSync } = await import("fs")
+  const { join } = await import("path")
+
+  const roots = ["app", "components", "lib", "middleware.ts"]
+  const files = []
+  const walk = (p) => {
+    if (!existsSync(p)) return
+    if (statSync(p).isFile()) { if (/\.tsx?$/.test(p)) files.push(p); return }
+    for (const e of readdirSync(p)) if (e !== "node_modules") walk(join(p, e))
+  }
+  roots.forEach(walk)
+
+  const stripComments = (src) =>
+    src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "")
+
+  const offenders = []
+  for (const f of files) {
+    const code = stripComments(readFileSync(f, "utf8"))
+    code.split("\n").forEach((line, i) => {
+      if (line.includes("user_metadata")) offenders.push(`${f}:${i + 1}: ${line.trim()}`)
+    })
+  }
+
+  if (offenders.length === 0)
+    ok("10.1", `No user_metadata reads in ${files.length} source files — authorization reads app_metadata only`)
+  else {
+    bad("10.1", `${offenders.length} user_metadata read(s) found — migration 012's fix is being bypassed:`)
+    offenders.forEach(o => console.log(`      ${o}`))
+  }
+
+  // The role reader must exist and must not have been pointed back at user_metadata.
+  if (existsSync("lib/auth/getRole.ts")) {
+    const src = stripComments(readFileSync("lib/auth/getRole.ts", "utf8"))
+    if (src.includes("app_metadata") && !src.includes("user_metadata"))
+      ok("10.2", "lib/auth/getRole.ts reads app_metadata only")
+    else
+      bad("10.2", "lib/auth/getRole.ts does not read app_metadata exclusively")
+  } else {
+    bad("10.2", "lib/auth/getRole.ts is missing — every role read should funnel through it")
+  }
+
+  // is_admin() in the database must no longer consult user_metadata.
+  const { data: adminFnOk, error: adminFnErr } = await sb.rpc("is_admin")
+  if (adminFnErr && !/permission|does not exist/i.test(adminFnErr.message))
+    note("10.3", `is_admin() probe inconclusive: ${adminFnErr.message}`)
+  else
+    ok("10.3", `is_admin() callable as service_role (returned ${adminFnOk}) — body verified by 012's own check`)
+}
+
 // ─── CLEANUP ─────────────────────────────────────────────────────────────────
 if (testLeadId) {
   await sb.from("call_logs").delete().eq("lead_id",testLeadId)

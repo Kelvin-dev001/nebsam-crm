@@ -4,6 +4,7 @@ import { useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Loader2 } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
+import { getRole } from "@/lib/auth/getRole"
 
 export default function LoginPage() {
   const router       = useRouter()
@@ -30,8 +31,9 @@ export default function LoginPage() {
       return
     }
 
-    // Role-based redirect
-    const role = data.session?.user.user_metadata?.role as string | undefined
+    // Role-based redirect. app_metadata, not user_metadata (migration 012).
+    // The session is seconds old here, so its user object is current.
+    const role = getRole(data.user ?? data.session?.user)
     const next = searchParams.get("next")
 
     if (role === "admin") {

@@ -13,11 +13,12 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { createClient } from "@/lib/supabase/client"
 import { performSignOut } from "@/lib/auth/signOut"
+import { roleOrDefault, type Role } from "@/lib/auth/getRole"
 import { useTelemarketerStore } from "@/lib/stores/telemarketerStore"
 
 interface AuthUser {
   email: string
-  role: string
+  role: Role
   displayName: string
 }
 
@@ -28,13 +29,17 @@ export function UserMenu() {
 
   useEffect(() => {
     const supabase = createClient()
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session) return
-      const role        = (session.user.user_metadata?.role as string | undefined) ?? "telemarketer"
+    // getUser(), not getSession(): the role now lives in app_metadata
+    // (migration 012), and getSession() only decodes the cookie, which can be
+    // up to an hour stale. This is an ordinary effect rather than the
+    // onAuthStateChange callback, so the GoTrue lock rule does not apply here.
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return
+      const role        = roleOrDefault(user)
       const displayName =
         activeTelemarketer?.full_name ??
-        (role === "admin" ? "Admin" : session.user.email?.split("@")[0] ?? "User")
-      setUser({ email: session.user.email ?? "", role, displayName })
+        (role === "admin" ? "Admin" : user.email?.split("@")[0] ?? "User")
+      setUser({ email: user.email ?? "", role, displayName })
     })
   }, [activeTelemarketer])
 

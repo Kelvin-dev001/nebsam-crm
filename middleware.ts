@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr"
 import { NextResponse, type NextRequest } from "next/server"
 import { POST_SALE_ROUTES } from "@/lib/departments/navItems"
+import { roleOrDefault } from "@/lib/auth/getRole"
 import type { PostSaleModel } from "@/types/crm"
 
 export async function middleware(request: NextRequest) {
@@ -45,7 +46,13 @@ export async function middleware(request: NextRequest) {
   }
 
   // ── Authenticated ─────────────────────────────────────────────────────────
-  const role = (user.user_metadata?.role as string | undefined) ?? "telemarketer"
+  // Role comes from app_metadata, which only the service role can write.
+  // user_metadata is user-writable from the browser and must never be read for
+  // an authorization decision — see lib/auth/getRole.ts and migration 012.
+  //
+  // getUser() above fetches the user from the Auth server rather than decoding
+  // the cookie, so this value is current even if the JWT is up to an hour old.
+  const role = roleOrDefault(user)
 
   // Redirect away from login page
   if (path === "/login") {

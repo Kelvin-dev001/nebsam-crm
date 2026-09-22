@@ -4,6 +4,7 @@ import { useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { performSignOut } from "@/lib/auth/signOut"
+import { roleOrDefault } from "@/lib/auth/getRole"
 import { useTelemarketerStore } from "@/lib/stores/telemarketerStore"
 import type { Telemarketer } from "@/types/crm"
 
@@ -49,7 +50,11 @@ export function AuthProvider() {
         return
       }
 
-      const role = user.user_metadata?.role as string | undefined
+      // app_metadata, not user_metadata: the latter is user-writable from the
+      // browser (lib/auth/getRole.ts, migration 012). roleOrDefault fails
+      // closed, so a role-less user is treated as a rep, never as an admin —
+      // note the `else` branch below is the ADMIN path.
+      const role = roleOrDefault(user)
 
       if (role === "telemarketer") {
         const tm = await fetchLinkedTelemarketer(user.id)
@@ -82,10 +87,25 @@ export function AuthProvider() {
         }
 
         if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
-          const role = session.user.user_metadata?.role as string | undefined
+          // Deliberately NOT reading the role from session.user. That object is
+          // decoded from the JWT, which can be up to an hour old (jwt_expiry is
+          // 3600s) — so right after migration 012's backfill it may still carry
+          // no app_metadata.role at all. Treating that as "role-less" would
+          // clear a working rep's store and blank their screen.
+          //
+          // getUser() asks the Auth server instead, so it is always current.
+          // It stays INSIDE the timeout: calling it in the callback body would
+          // deadlock the GoTrue lock described above.
           setTimeout(async () => {
-            if (role === "telemarketer") {
-              const tm = await fetchLinkedTelemarketer(session.user.id)
+            const { data: { user } } = await supabase.auth.getUser()
+
+            if (!user) {
+              setActiveTelemarketer(null)
+              return
+            }
+
+            if (roleOrDefault(user) === "telemarketer") {
+              const tm = await fetchLinkedTelemarketer(user.id)
               setIfChanged(tm)
             } else {
               setIfChanged(null)
