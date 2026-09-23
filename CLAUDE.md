@@ -382,7 +382,9 @@ Full spec: `USER-MANAGEMENT-PROMPT.md`.
       **Not yet deployed to production.**
 - [x] **U4** — Move department, deactivate, reactivate, edit profile, and the `DepartmentManager`
       fix (defects 5 and 6). Verified on staging, 30/30. **Not yet deployed to production.**
-- [ ] **U4b** — Named administrators, step-up auth, activity feed, retire the shared login.
+- [x] **U4b** — Named administrators, step-up auth, activity feed, retire the shared login.
+      Verified on staging, 32/32. **First named admin still to be created by Kelvin** — the
+      create requires his own password for step-up, so it cannot be done for him.
 - [ ] **U5** — Verify, document, ship.
 
 ---

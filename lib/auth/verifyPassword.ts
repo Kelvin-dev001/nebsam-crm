@@ -39,10 +39,22 @@ export async function verifyPassword(email: string, password: string): Promise<b
 
   const { data, error } = await throwaway.auth.signInWithPassword({ email, password })
 
-  // Tidy up the session this just minted so it cannot be reused. Failure here
-  // is not fatal: the session was never persisted anywhere, and it expires.
+  // Discard the session this just minted — but ONLY locally.
+  //
+  // `signOut()` defaults to scope 'global', which revokes EVERY session that
+  // user has, including the cookie session the caller is using right now. That
+  // turns "confirm it is you" into "log yourself out of your own browser", and
+  // it does it to the person performing the action, not the target.
+  //
+  // Caught on the U4b run: after the first successful step-up, every subsequent
+  // request from the acting admin answered 401 "You are not signed in". The
+  // same latent bug would have signed a user out everywhere the moment they
+  // changed their own password.
+  //
+  // 'local' clears only this throwaway client's copy. The server-side session
+  // row it created is never handed to anyone and expires on its own.
   if (data?.session) {
-    await throwaway.auth.signOut().catch(() => {})
+    await throwaway.auth.signOut({ scope: "local" }).catch(() => {})
   }
 
   return !error && Boolean(data?.user)

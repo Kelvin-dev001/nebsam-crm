@@ -16,9 +16,12 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table"
 import { formatPhone } from "@/lib/utils/phoneHelpers"
+import { createClient } from "@/lib/supabase/client"
 import { AddUserSheet } from "./users/AddUserSheet"
 import { LoginDetailsDialog, type LoginDetails } from "./users/LoginDetailsDialog"
 import { ReassignDialog, type Candidate } from "./users/ReassignDialog"
+import { AddAdminSheet } from "./admins/AddAdminSheet"
+import { AdminActionDialog, type AdminAction } from "./admins/AdminActionDialog"
 import { useDepartment } from "@/lib/departments/useDepartment"
 
 /**
@@ -57,7 +60,9 @@ interface AdminRow {
   full_name: string
   login_email: string | null
   phone: string | null
+  is_active: boolean
   is_shared_account: boolean
+  must_change_password: boolean
   last_sign_in_at: string | null
   status: string
 }
@@ -118,6 +123,11 @@ export function UserManager() {
   const [reassignBusy, setReassignBusy] = useState(false)
   const [reassignError, setReassignError] = useState<string | null>(null)
   const { departments: allDepartments } = useDepartment()
+  const [addAdminOpen, setAddAdminOpen] = useState(false)
+  const [adminAction, setAdminAction] = useState<{ admin: AdminRow; action: AdminAction } | null>(null)
+  const [adminBusy, setAdminBusy] = useState(false)
+  const [adminError, setAdminError] = useState<string | null>(null)
+  const [me, setMe] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setError(null)
@@ -141,6 +151,16 @@ export function UserManager() {
   }, [])
 
   useEffect(() => { void load() }, [load])
+
+  // The signed-in admin's own id. Reset and Remove-access are refused for your
+  // own row by the server; hiding them here stops an admin clicking a button
+  // that can only fail.
+  useEffect(() => {
+    void (async () => {
+      const { data } = await createClient().auth.getUser()
+      setMe(data.user?.id ?? null)
+    })()
+  }, [])
 
   async function createLogin(rep: UserRow) {
     setCreatingLoginFor(rep.rep_id)
@@ -317,6 +337,76 @@ export function UserManager() {
     }
   }
 
+  // A named admin who has signed in AND chosen their own password. Until one
+  // exists, retiring the shared login could leave nobody able to administer
+  // anything — the server refuses it too, this just stops offering the button.
+  const provenNamedAdmin = admins.find(
+    (a) => !a.is_shared_account && a.is_active && a.last_sign_in_at && !a.must_change_password,
+  )
+
+  async function runAdminAction(actorPassword: string, reason: string | null) {
+    if (!adminAction) return
+    const { admin: target, action } = adminAction
+    setAdminBusy(true)
+    setAdminError(null)
+    try {
+      const url =
+        action === "retire"
+          ? "/api/admin/admins/retire-shared"
+          : action === "reset"
+            ? `/api/admin/admins/${target.user_id}/reset-password`
+            : `/api/admin/admins/${target.user_id}/${action}`
+
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ actorPassword, ...(reason ? { reason } : {}) }),
+      })
+      const b = await res.json()
+
+      if (!res.ok || !b.ok) {
+        setAdminError(b.error ?? "That did not work.")
+        return
+      }
+
+      if (b.tempPassword) {
+        setDetails({ full_name: b.full_name, email: b.email, tempPassword: b.tempPassword })
+      } else if (action === "retire") {
+        toast.success(
+          "The shared admin login is retired. Anyone who used it now needs their own account.",
+        )
+      } else {
+        toast.success(`${b.full_name ?? "Administrator"} updated`)
+      }
+      if (b.warnings?.length) {
+        toast.warning(`Partly done: ${b.warnings.join("; ")}. Try again to finish.`)
+      }
+      setAdminAction(null)
+      await load()
+    } catch {
+      setAdminError("Could not reach the server.")
+    } finally {
+      setAdminBusy(false)
+    }
+  }
+
+  async function requireAdminChange(target: AdminRow) {
+    setBusyFor(target.user_id)
+    try {
+      const res = await fetch(
+        `/api/admin/admins/${target.user_id}/require-password-change`, { method: "POST" },
+      )
+      const b = await res.json()
+      if (!res.ok || !b.ok) { toast.error(b.error ?? "Could not set the flag."); return }
+      toast.success(`${b.full_name} will be asked to set a new password at their next sign-in`)
+      await load()
+    } catch {
+      toast.error("Could not reach the server.")
+    } finally {
+      setBusyFor(null)
+    }
+  }
+
   const departments = useMemo(
     () => Array.from(
       new Set(users.map((u) => u.department_name).filter((d): d is string => Boolean(d))),
@@ -390,8 +480,8 @@ export function UserManager() {
             <Shield className="h-4 w-4 text-slate-500" />
             Administrators
           </h3>
-          <Button variant="outline" size="sm" disabled title="Arrives in sprint U4b">
-            Add administrator
+          <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setAddAdminOpen(true)}>
+            <Plus className="h-4 w-4" /> Add administrator
           </Button>
         </div>
         <div className="rounded-lg border border-slate-200">
@@ -402,6 +492,7 @@ export function UserManager() {
                 <TableHead>Login email</TableHead>
                 <TableHead>Last sign-in</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead />
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -418,6 +509,65 @@ export function UserManager() {
                   <TableCell className="font-mono text-sm">{a.login_email ?? "—"}</TableCell>
                   <TableCell className="text-sm text-slate-600">{relative(a.last_sign_in_at)}</TableCell>
                   <TableCell><StatusBadge status={a.status} /></TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex justify-end gap-1.5">
+                      {a.user_id === me && (
+                        <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs text-blue-700">
+                          You
+                        </span>
+                      )}
+                      {a.status === "deactivated" ? (
+                        <Button
+                          size="sm" variant="outline" className="gap-1.5"
+                          onClick={() => { setAdminError(null); setAdminAction({ admin: a, action: "reactivate" }) }}
+                        >
+                          <UserCheck className="h-3.5 w-3.5" />
+                          {a.is_shared_account ? "Un-retire" : "Restore"}
+                        </Button>
+                      ) : a.user_id === me ? null : (
+                        <>
+                          <Button
+                            size="sm" variant="outline" className="gap-1.5"
+                            onClick={() => { setAdminError(null); setAdminAction({ admin: a, action: "reset" }) }}
+                          >
+                            <KeyRound className="h-3.5 w-3.5" /> Reset password
+                          </Button>
+                          {!a.must_change_password && (
+                            <Button
+                              size="sm" variant="ghost" className="gap-1.5"
+                              disabled={busyFor === a.user_id}
+                              onClick={() => void requireAdminChange(a)}
+                            >
+                              <RotateCcw className="h-3.5 w-3.5" /> Require change
+                            </Button>
+                          )}
+                          {a.is_shared_account ? (
+                            <Button
+                              size="sm" variant="ghost"
+                              className="gap-1.5 text-red-600 hover:bg-red-50 hover:text-red-700"
+                              disabled={!provenNamedAdmin}
+                              title={
+                                provenNamedAdmin
+                                  ? `${provenNamedAdmin.full_name} has signed in and set their own password, so this is safe.`
+                                  : "A named administrator must sign in and set their own password first, or nobody could administer the CRM."
+                              }
+                              onClick={() => { setAdminError(null); setAdminAction({ admin: a, action: "retire" }) }}
+                            >
+                              <UserMinus className="h-3.5 w-3.5" /> Retire shared login
+                            </Button>
+                          ) : (
+                            <Button
+                              size="sm" variant="ghost"
+                              className="gap-1.5 text-red-600 hover:bg-red-50 hover:text-red-700"
+                              onClick={() => { setAdminError(null); setAdminAction({ admin: a, action: "deactivate" }) }}
+                            >
+                              <UserMinus className="h-3.5 w-3.5" /> Remove access
+                            </Button>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -581,9 +731,7 @@ export function UserManager() {
           </Table>
         </div>
 
-        <p className="mt-2 text-xs text-slate-500">
-          Edit, reset password, move department and deactivate arrive in sprints U3 and U4.
-        </p>
+
       </section>
 
       {confirmReset && (
@@ -617,6 +765,31 @@ export function UserManager() {
             </div>
           </DialogContent>
         </Dialog>
+      )}
+
+      <AddAdminSheet
+        open={addAdminOpen}
+        onOpenChange={setAddAdminOpen}
+        onCreated={(d) => { setDetails(d); void load() }}
+      />
+
+      {adminAction && (
+        <AdminActionDialog
+          action={adminAction.action}
+          name={adminAction.admin.full_name}
+          busy={adminBusy}
+          error={adminError}
+          extra={
+            adminAction.action === "retire" && provenNamedAdmin ? (
+              <p className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
+                <strong>{provenNamedAdmin.full_name}</strong> has signed in and set their own
+                password, so administrative access will not be lost.
+              </p>
+            ) : undefined
+          }
+          onCancel={() => { setAdminAction(null); setAdminError(null) }}
+          onConfirm={(pw, reason) => void runAdminAction(pw, reason)}
+        />
       )}
 
       {reassign && (
