@@ -83,13 +83,27 @@ export async function POST(request: Request) {
     )
   }
 
+  // Resolve a display name for the activity feed. Without this the feed reads
+  // "password_changed by null", which is worse than useless on a screen whose
+  // whole purpose is answering "who did this?".
+  //
+  // Looked up here and SNAPSHOTTED, like every other audit row: the log must
+  // still read correctly after the person is renamed or deactivated.
+  const [{ data: asAdmin }, { data: asRep }] = await Promise.all([
+    admin.from("admin_profiles").select("full_name").eq("user_id", guard.user.id).maybeSingle(),
+    admin.from("telemarketers").select("full_name").eq("user_id", guard.user.id).maybeSingle(),
+  ])
+  const actorName = asAdmin?.full_name ?? asRep?.full_name ?? email
+
   // Audit it. NEVER the password — not the old one, not the new one, not a
   // hash, not a length (§5.1).
   const { error: auditErr } = await admin.from("user_admin_audit").insert({
     action: "password_changed",
-    target_kind: "rep",
+    target_kind: asAdmin ? "admin" : "rep",
     target_user_id: guard.user.id,
+    target_rep_id: null,
     performed_by: guard.user.id,
+    performed_by_name: actorName,
     performed_by_email: email,
     details: { self_service: true },
   })

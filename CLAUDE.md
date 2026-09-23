@@ -360,6 +360,69 @@ Sprint detail, acceptance criteria and the verification checklist live in
 
 Earlier decisions U-D1 to U-D8 are in `USER-MANAGEMENT-PROMPT.md` §2 and are not re-litigated.
 
+## User management — how it is wired
+
+Sprints U0-U4b, live in production. Spec: `USER-MANAGEMENT-PROMPT.md`.
+Operator instructions are in `README.md` §12; this is the engineering shape.
+
+**Every `/api` route guards itself.** `middleware.ts:38` returns early for `/api`, so
+middleware protects NONE of them, and they act through the service role, which bypasses
+RLS. `requireAdmin()` / `requireUser()` is therefore the only gate. Never add a route
+under `app/api/` without one — that is exactly how `/api/whatsapp/send` ended up an open
+relay.
+
+**`lib/supabase/admin.ts` is `server-only`.** The build fails if a client component
+imports it, directly or transitively. That guard has already earned its keep: it caught
+`SetPasswordForm` importing the password policy from the module that holds the temporary
+password generator. The split is by **secrecy**, not by subject — `passwordPolicy.ts` is
+public, `tempPassword.ts` is not.
+
+**Temporary passwords cross the wire once.** One HTTP response, one dialog that cannot be
+reopened. Never logged, never stored, never in the audit table. `scripts/u3-verify.mjs`
+asserts no password of any kind appears in `user_admin_audit`.
+
+**`signOut()` defaults to `scope: 'global'`.** It revokes EVERY session that user has,
+including the caller's own. `verifyPassword` uses `scope: 'local'` for exactly this
+reason. Getting this wrong signs a user out of their own browser the moment they confirm
+their password — which is what happened, and what `scripts/u4b-verify.mjs` caught.
+
+**The not-self and last-admin rules live in the DATABASE**, in
+`deactivate_admin_guarded` (013), not in the route. A route-level check is a race: two
+admins deactivating each other simultaneously both see a count of two, both proceed, and
+the system ends with zero administrators. The function takes an advisory lock.
+
+**Reassignment before removal, always.** `leads_dept_scoped` requires
+`department_id = current_rep_department() AND assigned_to = current_rep()`, so open leads
+left on a deactivated or moved rep match nobody and vanish from every queue.
+`reassign_rep_open_work` suppresses `leads_updated_at` while it moves them — without
+that, hundreds of leads jump to the top of the inheritor's queue and the team's
+last-touched ordering is destroyed permanently.
+
+**`followup_schedule.telemarketer_id` is NOT NULL**, so a pending follow-up cannot go to
+the backlog the way a lead can. With no inheritor they are **cancelled**, and
+`FollowUpStatus` gained `"cancelled"` for it. §7.3 of the spec did not account for this.
+
+**Audit actors are snapshotted, never joined.** `performed_by_name` / `performed_by_email`
+are copied in at write time so the log still reads correctly after someone is renamed or
+deactivated. A join would silently rewrite history.
+
+### Verification scripts
+
+| Script | Proves |
+|---|---|
+| `u0-security-proof.mjs` | a rep setting `user_metadata.role='admin'` gains nothing |
+| `u1-verify-routes.mjs` | every route: 401 anonymous, 403 as a rep |
+| `u1-verify-sessions.mjs` | `revoke_user_sessions` actually revokes |
+| `u2-verify.mjs` | the Users tab, adding users, `rep_workload` counts |
+| `u3-verify.mjs` | passwords end to end; no password in the audit trail |
+| `u4-verify.mjs` | move / deactivate / reactivate; `updated_at` preserved |
+| `u4b-verify.mjs` | step-up, the last-admin race, retiring the shared login |
+| `user-management-check.mjs` | the §11 checklist; `--target=production` is read-only |
+
+All sprint scripts are **staging-only** and create and delete their own fixtures. They
+sign in with a real session **cookie**, not a bearer token — `@supabase/ssr` reads
+cookies, so a bearer token would pass vacuously without ever exercising the guard.
+
 ## Sprint Plan — user management
 
 Full spec: `USER-MANAGEMENT-PROMPT.md`.
@@ -385,7 +448,9 @@ Full spec: `USER-MANAGEMENT-PROMPT.md`.
 - [x] **U4b** — Named administrators, step-up auth, activity feed, retire the shared login.
       Verified on staging, 32/32. **First named admin still to be created by Kelvin** — the
       create requires his own password for step-up, so it cannot be done for him.
-- [ ] **U5** — Verify, document, ship.
+- [x] **U5** — `scripts/user-management-check.mjs` (the §11 checklist, read-only on both
+      targets), `README.md` §12 "Adding and Managing Users", and the section above.
+      Production: **23 passed, 0 failed**, 2026-09-23.
 
 ---
 

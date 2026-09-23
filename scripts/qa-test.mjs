@@ -497,16 +497,23 @@ console.log("\n══ SECTION 10: AUTHORIZATION SOURCE ══")
   const stripComments = (src) =>
     src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "")
 
+  // A WRITE of a display name — `user_metadata: { full_name }` — is fine; that
+  // is what the field is for, and auth.admin.createUser sets it. An
+  // authorization READ — `user.user_metadata?.role` — is not. Anything
+  // mentioning role is flagged either way.
+  const isOffence = (line) =>
+    line.includes("user_metadata") && (!/user_metadata\s*:/.test(line) || /role/.test(line))
+
   const offenders = []
   for (const f of files) {
     const code = stripComments(readFileSync(f, "utf8"))
     code.split("\n").forEach((line, i) => {
-      if (line.includes("user_metadata")) offenders.push(`${f}:${i + 1}: ${line.trim()}`)
+      if (isOffence(line)) offenders.push(`${f}:${i + 1}: ${line.trim()}`)
     })
   }
 
   if (offenders.length === 0)
-    ok("10.1", `No user_metadata reads in ${files.length} source files — authorization reads app_metadata only`)
+    ok("10.1", `No authorization read of user_metadata in ${files.length} source files`)
   else {
     bad("10.1", `${offenders.length} user_metadata read(s) found — migration 012's fix is being bypassed:`)
     offenders.forEach(o => console.log(`      ${o}`))
