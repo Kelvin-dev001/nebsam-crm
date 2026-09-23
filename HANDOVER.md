@@ -179,7 +179,29 @@ still unambiguous (one FK each) and need no hint.
 The reason it was invisible: `AllLeadsOverview` rendered its empty state instead of surfacing the
 query error. Worth logging failures in any new list view.
 
-### 9. The GoTrue lock and the RHF toggle rules
+### 9. A wrong Tailwind variant name is silent, and it broke both tab screens
+
+`components/ui/tabs.tsx` used `data-horizontal:` / `data-vertical:`. Tailwind compiles those to
+`&[data-horizontal]` and `&[data-vertical]` — attributes that do not exist. The element carries
+`data-orientation="horizontal"`.
+
+So the selectors never matched, `flex-col` never applied, and the Tabs root stayed a flex **row**.
+Every tab panel rendered *beside* its tab strip instead of below it, clipped at the viewport edge,
+pushing the page 219px wider than the window. It affected both places the component is used —
+Admin (all eight tabs) and `/leads/[id]` (every rep, every day).
+
+Twelve selectors carried the same mistake. Fixed 2026-09-23 to `data-[orientation=…]`, and the
+file now carries a note.
+
+**The lesson is the failure mode, not the selector.** A misspelled Tailwind variant is not an
+error. It compiles, it ships, and it simply never matches — no warning at build time, no console
+message, nothing in tsc or lint. All three were green while this was live. It was found only by
+opening the page in a browser and noticing the layout was wrong.
+
+When a variant looks like it should apply and does not, check what attribute the element actually
+carries (`el.getAttributeNames()`) before assuming the CSS is right.
+
+### 10. The GoTrue lock and the RHF toggle rules
 
 Both predate this work, both are recorded in `CLAUDE.md`, and both have already caused outages.
 `AuthProvider.onAuthStateChange` must stay non-async. Toggles must be plain React state, never
