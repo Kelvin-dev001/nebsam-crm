@@ -380,7 +380,8 @@ Full spec: `USER-MANAGEMENT-PROMPT.md`.
       `/account/password`, the forced-change middleware gate, the break-glass script, and the
       deprecation guard on `setup-auth-users.mjs`. Verified on staging, 28 + 8 + 6 checks.
       **Not yet deployed to production.**
-- [ ] **U4** — Move department, deactivate, reactivate.
+- [x] **U4** — Move department, deactivate, reactivate, edit profile, and the `DepartmentManager`
+      fix (defects 5 and 6). Verified on staging, 30/30. **Not yet deployed to production.**
 - [ ] **U4b** — Named administrators, step-up auth, activity feed, retire the shared login.
 - [ ] **U5** — Verify, document, ship.
 

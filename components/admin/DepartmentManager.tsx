@@ -91,27 +91,6 @@ export function DepartmentManager() {
     }
   }
 
-  async function assignRep(rep: RepRow, departmentId: string | null) {
-    setBusy(true)
-    try {
-      const supabase = createClient()
-      const { error } = await supabase
-        .from("telemarketers")
-        .update({ department_id: departmentId })
-        .eq("id", rep.id)
-      if (error) throw error
-      setReps((prev) =>
-        prev.map((r) => (r.id === rep.id ? { ...r, department_id: departmentId } : r)),
-      )
-      toast.success(`${rep.full_name} moved`)
-    } catch (err) {
-      console.error(err)
-      toast.error("Could not reassign the rep")
-    } finally {
-      setBusy(false)
-    }
-  }
-
   if (!loaded) {
     return (
       <div className="space-y-3">
@@ -297,23 +276,21 @@ export function DepartmentManager() {
                 <div key={r.id} className={cn("flex items-center gap-3 px-3 py-2", !r.is_active && "opacity-50")}>
                   <span className="text-sm font-medium text-slate-800 w-40 truncate">{r.full_name}</span>
                   <span className="text-xs text-slate-500 flex-1 truncate">{r.email}</span>
-                  <select
-                    value={r.department_id ?? ""}
-                    disabled={busy}
-                    onChange={(e) => void assignRep(r, e.target.value || null)}
-                    className={selectSm}
-                  >
-                    <option value="">Unassigned</option>
-                    {departments.map((d) => (
-                      <option key={d.id} value={d.id}>{d.name}</option>
-                    ))}
-                  </select>
+                  <span className="text-xs text-slate-600 w-44 truncate text-right">
+                    {departments.find((d) => d.id === r.department_id)?.name ?? "—"}
+                  </span>
                 </div>
               ))}
               {reps.length === 0 && (
                 <p className="px-3 py-6 text-center text-sm text-slate-500">No reps yet.</p>
               )}
             </div>
+            <p className="mt-2 text-xs text-slate-500">
+              To move a rep between departments, use <strong>Admin &rarr; Users</strong>. Moving
+              someone moves their work: leads still assigned to them in the old department would
+              otherwise match no rep at all and disappear from every queue, so the move has to ask
+              who takes them over.
+            </p>
           </section>
         </>
       )}

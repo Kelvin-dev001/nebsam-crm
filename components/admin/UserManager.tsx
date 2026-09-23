@@ -1,7 +1,10 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { AlertTriangle, KeyRound, Loader2, Plus, RotateCcw, Search, Shield, Users } from "lucide-react"
+import {
+  AlertTriangle, ArrowLeftRight, KeyRound, Loader2, Plus, RotateCcw, Search, Shield, UserCheck,
+  UserMinus, Users,
+} from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -15,6 +18,8 @@ import {
 import { formatPhone } from "@/lib/utils/phoneHelpers"
 import { AddUserSheet } from "./users/AddUserSheet"
 import { LoginDetailsDialog, type LoginDetails } from "./users/LoginDetailsDialog"
+import { ReassignDialog, type Candidate } from "./users/ReassignDialog"
+import { useDepartment } from "@/lib/departments/useDepartment"
 
 /**
  * Admin → Users (§8.2). Replaces TelemarketerManager, which is left in place
@@ -37,7 +42,9 @@ interface UserRow {
   login_email: string | null
   phone: string | null
   job_title: string | null
+  department_id: string | null
   department_name: string | null
+  is_active: boolean
   must_change_password: boolean
   open_leads: number
   pending_followups: number
@@ -107,6 +114,10 @@ export function UserManager() {
   const [creatingLoginFor, setCreatingLoginFor] = useState<string | null>(null)
   const [busyFor, setBusyFor] = useState<string | null>(null)
   const [confirmReset, setConfirmReset] = useState<UserRow | null>(null)
+  const [reassign, setReassign] = useState<{ rep: UserRow; mode: "deactivate" | "move" } | null>(null)
+  const [reassignBusy, setReassignBusy] = useState(false)
+  const [reassignError, setReassignError] = useState<string | null>(null)
+  const { departments: allDepartments } = useDepartment()
 
   const load = useCallback(async () => {
     setError(null)
@@ -193,6 +204,111 @@ export function UserManager() {
         return
       }
       toast.success(`${body.full_name} will be asked to set a new password at their next sign-in`)
+      await load()
+    } catch {
+      toast.error("Could not reach the server.")
+    } finally {
+      setBusyFor(null)
+    }
+  }
+
+  // Who could inherit: active reps in the SAME department, never the person
+  // being acted on. reassign_rep_open_work refuses anything else, because RLS
+  // would hide the leads from an inheritor in another department.
+  function candidatesFor(rep: UserRow): Candidate[] {
+    return users
+      .filter(
+        (u) =>
+          u.rep_id !== rep.rep_id &&
+          u.department_id === rep.department_id &&
+          u.is_active &&
+          u.status !== "deactivated",
+      )
+      .map((u) => ({ rep_id: u.rep_id, full_name: u.full_name, open_leads: u.open_leads }))
+  }
+
+  async function runReassign(opts: {
+    inheritorId: string | null
+    reason: string | null
+    departmentId: string | null
+  }) {
+    if (!reassign) return
+    const { rep, mode } = reassign
+    setReassignBusy(true)
+    setReassignError(null)
+    try {
+      const url =
+        mode === "deactivate"
+          ? `/api/admin/users/${rep.rep_id}/deactivate`
+          : `/api/admin/users/${rep.rep_id}/department`
+      const body =
+        mode === "deactivate"
+          ? { inheritor_id: opts.inheritorId, reason: opts.reason }
+          : { department_id: opts.departmentId, inheritor_id: opts.inheritorId }
+
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      })
+      const b = await res.json()
+
+      if (!res.ok || !b.ok) {
+        // Keep the dialog open so the button becomes Retry. A partial failure
+        // is resumable by design, and closing would hide that.
+        setReassignError(b.error ?? "That did not work.")
+        return
+      }
+
+      const m = b.moved ?? {}
+      const parts: string[] = []
+      if (m.leads_moved) parts.push(`${m.leads_moved} lead${m.leads_moved === 1 ? "" : "s"}`)
+      if (m.followups_moved)
+        parts.push(`${m.followups_moved} follow-up${m.followups_moved === 1 ? "" : "s"}`)
+      if (m.followups_cancelled)
+        parts.push(
+          `${m.followups_cancelled} follow-up${m.followups_cancelled === 1 ? "" : "s"} cancelled`,
+        )
+      const where = b.inheritor ? ` to ${b.inheritor}` : m.to_backlog ? " to the backlog" : ""
+      const movedText = parts.length ? ` - ${parts.join(", ")}${where}` : ""
+
+      toast.success(
+        mode === "deactivate"
+          ? `${b.full_name} deactivated${movedText}`
+          : `${b.full_name} moved to ${b.to}${movedText}`,
+      )
+      if (b.warnings?.length) {
+        toast.warning(`Partly done: ${b.warnings.join("; ")}. Try again to finish.`)
+      }
+      setReassign(null)
+      await load()
+    } catch {
+      setReassignError("Could not reach the server.")
+    } finally {
+      setReassignBusy(false)
+    }
+  }
+
+  async function reactivate(rep: UserRow) {
+    setBusyFor(rep.rep_id)
+    try {
+      const res = await fetch(`/api/admin/users/${rep.rep_id}/reactivate`, { method: "POST" })
+      const b = await res.json()
+      if (!res.ok || !b.ok) {
+        toast.error(b.error ?? "Could not reactivate.")
+        return
+      }
+      if (b.no_login) {
+        toast.success(`${b.full_name} reactivated. They still need a login.`)
+      } else {
+        setDetails({
+          full_name: b.full_name,
+          email: b.email,
+          tempPassword: b.tempPassword,
+          departmentSlug: b.department?.slug ?? null,
+          departmentName: b.department?.name ?? null,
+        })
+      }
       await load()
     } catch {
       toast.error("Could not reach the server.")
@@ -412,7 +528,7 @@ export function UserManager() {
                             : <KeyRound className="h-3.5 w-3.5" />}
                           Reset password
                         </Button>
-                        {!u.must_change_password && (
+                        {!u.must_change_password && u.status !== "deactivated" && (
                           <Button
                             size="sm" variant="ghost" className="gap-1.5"
                             disabled={busyFor === u.rep_id}
@@ -422,6 +538,39 @@ export function UserManager() {
                             <RotateCcw className="h-3.5 w-3.5" />
                             Require change
                           </Button>
+                        )}
+                        {u.status === "deactivated" ? (
+                          <Button
+                            size="sm" variant="outline" className="gap-1.5"
+                            disabled={busyFor === u.rep_id}
+                            onClick={() => void reactivate(u)}
+                            title="Unblock their login and issue a new temporary password. Their old leads are NOT returned."
+                          >
+                            {busyFor === u.rep_id
+                              ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              : <UserCheck className="h-3.5 w-3.5" />}
+                            Reactivate
+                          </Button>
+                        ) : (
+                          <>
+                            <Button
+                              size="sm" variant="ghost" className="gap-1.5"
+                              onClick={() => { setReassignError(null); setReassign({ rep: u, mode: "move" }) }}
+                              title="Move them to another department. Their open work stays behind."
+                            >
+                              <ArrowLeftRight className="h-3.5 w-3.5" />
+                              Move
+                            </Button>
+                            <Button
+                              size="sm" variant="ghost"
+                              className="gap-1.5 text-red-600 hover:bg-red-50 hover:text-red-700"
+                              onClick={() => { setReassignError(null); setReassign({ rep: u, mode: "deactivate" }) }}
+                              title="Hand over their open work and block their login."
+                            >
+                              <UserMinus className="h-3.5 w-3.5" />
+                              Deactivate
+                            </Button>
+                          </>
                         )}
                       </div>
                     )}
@@ -468,6 +617,24 @@ export function UserManager() {
             </div>
           </DialogContent>
         </Dialog>
+      )}
+
+      {reassign && (
+        <ReassignDialog
+          mode={reassign.mode}
+          repName={reassign.rep.full_name}
+          departmentName={reassign.rep.department_name}
+          openLeads={reassign.rep.open_leads}
+          pendingFollowups={reassign.rep.pending_followups}
+          candidates={candidatesFor(reassign.rep)}
+          departments={allDepartments
+            .filter((d) => d.is_active && d.id !== reassign.rep.department_id)
+            .map((d) => ({ id: d.id, name: d.name }))}
+          busy={reassignBusy}
+          error={reassignError}
+          onCancel={() => { setReassign(null); setReassignError(null) }}
+          onConfirm={(opts) => void runReassign(opts)}
+        />
       )}
 
       <AddUserSheet
