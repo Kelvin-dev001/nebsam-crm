@@ -6,6 +6,40 @@
 // records, and writes CREDENTIALS.md (gitignored).
 // Safe to re-run: skips users that already exist.
 
+// ============================================================================
+// DEPRECATED — do not run this (U3, defect 2).
+//
+// TWO REASONS:
+//
+// 1. IT DESTROYS ITS OWN OUTPUT. Users that already exist are skipped WITHOUT
+//    adding a line to the credentials table, and then writeFileSync overwrites
+//    CREDENTIALS.md wholesale. Running it to add a fifth person therefore
+//    erases the recorded passwords of the first four.
+//
+// 2. IT IS NO LONGER THE WAY USERS ARE MADE. Admin -> Users creates the login
+//    and the rep row together, audits it, issues a temporary password and
+//    forces a change. This script does none of that, and it writes
+//    user_metadata.role, which migration 012 stopped trusting for
+//    authorization — an account made here would have no app_metadata.role at
+//    all and would be treated as a rep regardless of what is passed.
+//
+// Kept for historical reference only. To reset an admin who cannot sign in,
+// use scripts/admin-reset-password.mjs.
+// ============================================================================
+
+if (!process.argv.includes("--force-legacy")) {
+  console.error(`
+  DEPRECATED - add users in Admin -> Users instead.
+
+  This script overwrites CREDENTIALS.md and erases the passwords of anyone it
+  skips, and it writes the role to user_metadata, which is no longer read for
+  authorization (migration 012).
+
+  If you genuinely need the legacy behaviour, pass --force-legacy.
+`)
+  process.exit(1)
+}
+
 import { readFileSync, writeFileSync } from "fs"
 import { randomBytes } from "crypto"
 import { createClient } from "@supabase/supabase-js"

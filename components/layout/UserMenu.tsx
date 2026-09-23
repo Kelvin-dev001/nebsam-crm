@@ -1,7 +1,8 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { ChevronDown, LogOut, Loader2 } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { ChevronDown, LogOut, Loader2, KeyRound } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,6 +24,7 @@ interface AuthUser {
 }
 
 export function UserMenu() {
+  const router = useRouter()
   const { activeTelemarketer } = useTelemarketerStore()
   const [user,        setUser]        = useState<AuthUser | null>(null)
   const [signingOut,  setSigningOut]  = useState(false)
@@ -87,6 +89,13 @@ export function UserMenu() {
             </div>
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
+          <DropdownMenuItem
+            onClick={() => router.push("/account/password")}
+            className="cursor-pointer gap-2"
+          >
+            <KeyRound className="h-4 w-4" />
+            Change password
+          </DropdownMenuItem>
           <DropdownMenuItem
             onClick={handleSignOut}
             disabled={signingOut}

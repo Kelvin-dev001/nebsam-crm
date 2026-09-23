@@ -54,6 +54,37 @@ export async function middleware(request: NextRequest) {
   // the cookie, so this value is current even if the JWT is up to an hour old.
   const role = roleOrDefault(user)
 
+  // ── Deactivated logins (U3) ───────────────────────────────────────────────
+  // A ban applied mid-session leaves an unexpired JWT in play, so getUser() can
+  // still succeed for a short window. Bounce them out rather than letting a
+  // just-deactivated rep keep clicking around until their token expires.
+  const bannedUntil = (user as { banned_until?: string }).banned_until
+  if (bannedUntil && new Date(bannedUntil) > new Date()) {
+    await supabase.auth.signOut({ scope: "local" })
+    return NextResponse.redirect(new URL("/login?reason=deactivated", request.url))
+  }
+
+  // ── Forced password change (U3, §8.7) ─────────────────────────────────────
+  // Anyone carrying must_change_password goes to /account/password and nowhere
+  // else. Read from getUser(), so clearing the flag takes effect on the very
+  // next navigation rather than whenever the JWT happens to refresh.
+  //
+  // This gate is UX, not a security boundary: the user already proved they hold
+  // the temporary password by signing in. The data layer is deliberately NOT
+  // gated on this flag — doing so would mean a rep who somehow skipped it saw
+  // an app full of empty tables instead of a clear instruction.
+  //
+  // /api/* never reaches here (middleware returns early above), so
+  // /api/account/password stays callable — otherwise the gate would trap the
+  // user on a page whose submit button could not work.
+  const mustChangePassword =
+    (user.app_metadata as { must_change_password?: boolean } | undefined)
+      ?.must_change_password === true
+
+  if (mustChangePassword && path !== "/account/password") {
+    return NextResponse.redirect(new URL("/account/password?first=1", request.url))
+  }
+
   // Redirect away from login page
   if (path === "/login") {
     const dest = role === "admin" ? "/admin" : "/dashboard"

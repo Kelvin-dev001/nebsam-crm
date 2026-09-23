@@ -9,6 +9,7 @@ import { getRole } from "@/lib/auth/getRole"
 export default function LoginPage() {
   const router       = useRouter()
   const searchParams = useSearchParams()
+  const reason       = searchParams.get("reason")
   const [email,    setEmail]    = useState("")
   const [password, setPassword] = useState("")
   const [error,    setError]    = useState<string | null>(null)
@@ -94,6 +95,12 @@ export default function LoginPage() {
               />
             </div>
 
+            {reason === "deactivated" && !error && (
+              <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2.5 text-sm text-amber-800">
+                Your account has been deactivated. Contact your administrator.
+              </div>
+            )}
+
             {error && (
               <div className="rounded-lg bg-red-50 border border-red-200 px-3 py-2.5 text-sm text-red-700">
                 {error}
@@ -111,7 +118,7 @@ export default function LoginPage() {
           </form>
 
           <p className="text-center text-xs text-slate-400 pt-1">
-            Contact your administrator if you need access.
+            Forgot your password? Ask your administrator to reset it.
           </p>
         </div>
       </div>

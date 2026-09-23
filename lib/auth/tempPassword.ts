@@ -48,29 +48,6 @@ export function generateTempPassword(): string {
   return chars.join("")
 }
 
-/**
- * The password policy, enforced in the app so users get a readable message
- * rather than a raw Supabase error. Mirrors what Kelvin sets in
- * Dashboard → Authentication → Policies (§3 item 2).
- *
- * Kept here, beside the generator, so the two can never drift apart — a
- * generator that produced passwords its own policy rejected would lock out
- * every new user.
- */
-// 8, per Kelvin's decision 2026-09-22 (§3 item 2). Matches Supabase's own
-// default minimum, so the dashboard policy and this rule agree.
-//
-// Note the GENERATOR above still produces 12 characters. A temporary password
-// is typed once and replaced, so there is no reason to make it the weakest
-// thing the policy allows — the minimum governs what USERS may choose, not
-// what we hand out.
-export const PASSWORD_MIN_LENGTH = 8
-
-export function checkPasswordPolicy(password: string): string | null {
-  if (password.length < PASSWORD_MIN_LENGTH) {
-    return `Password must be at least ${PASSWORD_MIN_LENGTH} characters.`
-  }
-  if (!/[a-zA-Z]/.test(password)) return "Password must contain at least one letter."
-  if (!/[0-9]/.test(password)) return "Password must contain at least one digit."
-  return null
-}
+// The policy lives in ./passwordPolicy — NOT here — because the form needs it
+// and this module is server-only. Re-exported so server callers have one import.
+export { PASSWORD_MIN_LENGTH, checkPasswordPolicy } from "./passwordPolicy"

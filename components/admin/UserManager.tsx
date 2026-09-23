@@ -1,11 +1,14 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { AlertTriangle, KeyRound, Loader2, Plus, Search, Shield, Users } from "lucide-react"
+import { AlertTriangle, KeyRound, Loader2, Plus, RotateCcw, Search, Shield, Users } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
+} from "@/components/ui/dialog"
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table"
@@ -35,6 +38,7 @@ interface UserRow {
   phone: string | null
   job_title: string | null
   department_name: string | null
+  must_change_password: boolean
   open_leads: number
   pending_followups: number
   last_sign_in_at: string | null
@@ -101,6 +105,8 @@ export function UserManager() {
   const [addOpen, setAddOpen] = useState(false)
   const [details, setDetails] = useState<LoginDetails | null>(null)
   const [creatingLoginFor, setCreatingLoginFor] = useState<string | null>(null)
+  const [busyFor, setBusyFor] = useState<string | null>(null)
+  const [confirmReset, setConfirmReset] = useState<UserRow | null>(null)
 
   const load = useCallback(async () => {
     setError(null)
@@ -145,6 +151,53 @@ export function UserManager() {
       toast.error("Could not reach the server.")
     } finally {
       setCreatingLoginFor(null)
+    }
+  }
+
+  async function resetPassword(rep: UserRow) {
+    setConfirmReset(null)
+    setBusyFor(rep.rep_id)
+    try {
+      const res = await fetch(`/api/admin/users/${rep.rep_id}/reset-password`, { method: "POST" })
+      const body = await res.json()
+      if (!res.ok || !body.ok) {
+        toast.error(body.error ?? "Could not reset the password.")
+        return
+      }
+      // Straight into the one-time dialog. This is the only time the password
+      // is visible, so it must not be behind a toast that can be dismissed.
+      setDetails({
+        full_name: body.full_name,
+        email: body.email,
+        tempPassword: body.tempPassword,
+        departmentSlug: body.department?.slug ?? null,
+        departmentName: body.department?.name ?? null,
+      })
+      await load()
+    } catch {
+      toast.error("Could not reach the server.")
+    } finally {
+      setBusyFor(null)
+    }
+  }
+
+  async function requireChange(rep: UserRow) {
+    setBusyFor(rep.rep_id)
+    try {
+      const res = await fetch(
+        `/api/admin/users/${rep.rep_id}/require-password-change`, { method: "POST" },
+      )
+      const body = await res.json()
+      if (!res.ok || !body.ok) {
+        toast.error(body.error ?? "Could not set the flag.")
+        return
+      }
+      toast.success(`${body.full_name} will be asked to set a new password at their next sign-in`)
+      await load()
+    } catch {
+      toast.error("Could not reach the server.")
+    } finally {
+      setBusyFor(null)
     }
   }
 
@@ -335,7 +388,7 @@ export function UserManager() {
                   <TableCell className="text-sm text-slate-600">{relative(u.last_sign_in_at)}</TableCell>
                   <TableCell><StatusBadge status={u.status} /></TableCell>
                   <TableCell className="text-right">
-                    {u.status === "no_login" && (
+                    {u.status === "no_login" ? (
                       <Button
                         size="sm" variant="outline" className="gap-1.5"
                         disabled={creatingLoginFor === u.rep_id}
@@ -346,6 +399,31 @@ export function UserManager() {
                           : <KeyRound className="h-3.5 w-3.5" />}
                         Create login
                       </Button>
+                    ) : (
+                      <div className="flex justify-end gap-1.5">
+                        <Button
+                          size="sm" variant="outline" className="gap-1.5"
+                          disabled={busyFor === u.rep_id}
+                          onClick={() => setConfirmReset(u)}
+                          title="Issue a new temporary password and end their other sessions"
+                        >
+                          {busyFor === u.rep_id
+                            ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            : <KeyRound className="h-3.5 w-3.5" />}
+                          Reset password
+                        </Button>
+                        {!u.must_change_password && (
+                          <Button
+                            size="sm" variant="ghost" className="gap-1.5"
+                            disabled={busyFor === u.rep_id}
+                            onClick={() => void requireChange(u)}
+                            title="Ask them to choose a new password at their next sign-in. Their current password keeps working until they do."
+                          >
+                            <RotateCcw className="h-3.5 w-3.5" />
+                            Require change
+                          </Button>
+                        )}
+                      </div>
                     )}
                   </TableCell>
                 </TableRow>
@@ -358,6 +436,39 @@ export function UserManager() {
           Edit, reset password, move department and deactivate arrive in sprints U3 and U4.
         </p>
       </section>
+
+      {confirmReset && (
+        <Dialog open onOpenChange={(o) => { if (!o) setConfirmReset(null) }}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Reset {confirmReset.full_name}&apos;s password?</DialogTitle>
+              <DialogDescription>
+                Their current password stops working immediately, and they will be signed out
+                everywhere.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-2 text-sm text-slate-600">
+              <p>
+                You will get a temporary password to share with them. It is shown{" "}
+                <strong>once</strong> and is not stored anywhere.
+              </p>
+              <p className="text-slate-500">
+                If you only want them to choose a new password without cutting off the one they
+                have, use <strong>Require change</strong> instead.
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => setConfirmReset(null)}>
+                Cancel
+              </Button>
+              <Button className="flex-1" onClick={() => void resetPassword(confirmReset)}>
+                Reset password
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
 
       <AddUserSheet
         open={addOpen}

@@ -376,7 +376,10 @@ Full spec: `USER-MANAGEMENT-PROMPT.md`.
 - [x] **U2** — Users tab (`UserManager`, replacing `TelemarketerManager`), Add user with a login,
       "Create login" for unlinked rows, and the audit trail. Verified on staging, 27/27.
       **Not yet deployed to production.**
-- [ ] **U3** — Passwords (admin reset, user change, break-glass script).
+- [x] **U3** — Passwords: admin reset + "require change", the user's own
+      `/account/password`, the forced-change middleware gate, the break-glass script, and the
+      deprecation guard on `setup-auth-users.mjs`. Verified on staging, 28 + 8 + 6 checks.
+      **Not yet deployed to production.**
 - [ ] **U4** — Move department, deactivate, reactivate.
 - [ ] **U4b** — Named administrators, step-up auth, activity feed, retire the shared login.
 - [ ] **U5** — Verify, document, ship.
